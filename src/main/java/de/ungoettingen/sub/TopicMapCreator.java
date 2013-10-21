@@ -63,13 +63,11 @@ public class TopicMapCreator {
 
     private void calculatePositions(int radius, List<Region> items) {
         int i = 0;
-        double angle = 2 * Math.PI / items.size() + 1;
-        for (Region item : items) {
-
+        double angle = 2 * Math.PI / items.size() ;
+        for (Region item : items) {            
             int x = (int) (Math.cos(i * angle) * radius);
             int y = (int) (Math.sin(i * angle) * radius);
             i++;
-            //            shapeList[i].Location = new PointF((float) x, (float) y);
 //            System.out.println(item.getName() + " " + x + ", " + y);
             item.setPosition(new Point(x, y));
         }
@@ -165,7 +163,7 @@ public class TopicMapCreator {
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, size, size);
         g.setStroke(new BasicStroke(5));
-        g.setColor(Color.red);
+//        g.setColor(Color.red);
         drawRegion(g, r);
         try {
             ImageIO.write(bi, "png", new File("/tmp/world.png"));
@@ -176,11 +174,14 @@ public class TopicMapCreator {
 
     private void drawRegion(Graphics g, Region r) {
 //        System.out.println(r.getName() + ", " + r.getRadius() + ", " + r.getPosition());
+        g.setColor(Color.ORANGE);
         g.drawOval(r.getPosition().x - r.getRadius(), r.getPosition().y - r.getRadius(), r.getRadius() * 2, r.getRadius() * 2);
+        g.setColor(Color.blue);
         g.drawString(r.getName(), r.getPosition().x, r.getPosition().y);
 //        System.out.println(r.getDocuments().size() + " for " + r.getName());
         for (String key : r.getDocuments().keySet()) {
             Point pos = r.getDocuments().get(key);
+            g.setColor(Color.GRAY);
             g.drawRect(r.getPosition().x + pos.x, r.getPosition().y + pos.y, 10, 10);
         }
         if (r.getChildren() == null) {
@@ -188,8 +189,8 @@ public class TopicMapCreator {
         }
         r.reposChildren();
         for (Region child : r.getChildren()) {
+//            System.out.println(child + " for " +r );
             drawRegion(g, child);
-//            return;
         }
     }
 
@@ -228,7 +229,8 @@ public class TopicMapCreator {
 
                     placed += currentCircle;
                     radius += circleSize;
-                }
+                } // while documents
+                
                 placed = 0;
                 if (children != null) {
                     Collections.sort(children);
@@ -240,21 +242,26 @@ public class TopicMapCreator {
                         int currentChilds = 1;
                         while (true) {
                             if (currentChilds > children.size()) {
+                                // there are no more children to place
                                 break;
                             }
                             Region largest = children.get(placed + currentChilds - 1);
                             int possible = cirlesPerRadius(radius + largest.getRadius(), largest.getRadius());
+                            if (this.getName().equals("All")){
+                                System.out.println(largest.getName()+  ", " + largest.getRadius() + ", " + possible + ", " + radius);
+                            }
                             if (possible < currentChilds) {
                                 break;
                             }
                             currentChilds++;
                         }
+                        
                         subList = children.subList(placedChildren, currentChilds - 1);
 
                         radius = radius += subList.get(subList.size() - 1).getRadius() * 2;
-//                        if (this.getName().equals("All")){
-//                        System.out.println(radius + " for " + subList);
-//                        }
+                        if (this.getName().equals("All")){
+                        System.out.println(radius + " contains " + subList);
+                        }
                         calculatePositions(radius, subList);
                         placedChildren += subList.size();
                     }
