@@ -13,19 +13,20 @@ import org.xml.sax.SAXException;
 
 /**
  *
- * @author jdo
+ * @author doenitz@sub.uni-goettingen.de
  */
 public class MetsContentHandler implements ContentHandler {
 
     private String currentValue;
-    private String ddc;
+//    private String ddc;
 //    private Pattern dcPattern= Pattern.compile("^([0-9]{3})((\\.(?=[0-9]))?).*");
     private Pattern dcPattern = Pattern.compile("^([0-9]{3}).*");
-    private String ppn;
-    private String hostPpn;
+//    private String ppn;
+//    private String hostPpn;
     private boolean inHost = false;
-    private Map<String, List<String>> ddcMap = new HashMap<String, List<String>>();
-    private Map<String, String> hostMap = new HashMap<String, String>();
+//    private Map<String, List<String>> ddcMap = new HashMap<String, List<String>>();
+//    private Map<String, String> hostMap = new HashMap<String, String>();
+    private Mets mets;
     
 
     @Override
@@ -48,9 +49,9 @@ public class MetsContentHandler implements ContentHandler {
             extractDDCNumber();
         } else if (localName.equals("recordIdentifier")) {
             if (inHost) {
-                hostPpn = currentValue;
+                mets.setHost(currentValue);
             } else {
-                ppn = currentValue;
+                mets.setPPN(currentValue);
             }
         } else if (qName.equals("mods:relatedItem")) {
             inHost = false;
@@ -61,23 +62,21 @@ public class MetsContentHandler implements ContentHandler {
     }
 
     public void startDocument() throws SAXException {
-        hostPpn = null;
-        ppn = null;
-        ddc = null;
+        mets = new Mets();        
     }
 
     public void endDocument() throws SAXException {
-        if (ddc == null){
-            return;
-        }
-        if (!ddcMap.containsKey(ddc)) {
-            ddcMap.put(ddc, new LinkedList<String>());
-        }
-        ddcMap.get(ddc).add(ppn);
-        if (hostPpn != null) {
-            hostMap.put(ppn, hostPpn);
-//            System.out.println(hostPpn + " host for " + ppn);
-        }
+//        if (ddc == null){
+//            return;
+//        }
+//        if (!ddcMap.containsKey(ddc)) {
+//            ddcMap.put(ddc, new LinkedList<String>());
+//        }
+//        ddcMap.get(ddc).add(ppn);
+//        if (hostPpn != null) {
+//            hostMap.put(ppn, hostPpn);
+//
+//        }
     }
 
     public void startPrefixMapping(String prefix, String uri) throws SAXException {
@@ -102,23 +101,11 @@ public class MetsContentHandler implements ContentHandler {
             return;
         }
 //        System.out.println(currentValue + " -> '" + match.group(1)+ "'");        
-        ddc = match.group(1);
+        mets.setDdcNumber(match.group(1));
     }
 
-    public Map<String, List<String>> getDdcMap() {
-        return ddcMap;
-    }
-
-    public void setDdcMap(Map<String, List<String>> ddcMap) {
-        this.ddcMap = ddcMap;
-    }
-
-    public Map<String, String> getHostMap() {
-        return hostMap;
-    }
-
-    public void setHostMap(Map<String, String> hostMap) {
-        this.hostMap = hostMap;
+    public Mets getMets(){
+        return mets;
     }
     
 }

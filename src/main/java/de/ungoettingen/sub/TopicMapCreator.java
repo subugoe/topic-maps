@@ -11,8 +11,11 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -35,46 +38,46 @@ public class TopicMapCreator {
         app.run();
 //        app.calculatePositions(30);
     }
-    private Map<String, List<String>> ddcMap;
-    private Map<String, String> hostMap;
+//    private Map<String, List<String>> ddcMap;
+//    private Map<String, String> hostMap;
+    private Set<Mets> mets = new HashSet<Mets>();
+    private Region world;
 
     private void run() {
 //        Region world = buildTree();
-
-        long start = System.currentTimeMillis();
         Region world = buildTreeFromMets();
         layout(world);
     }
 
     private void readMETs() throws SAXException, FileNotFoundException, IOException {
         File dir = new File("/home/jdo/digizeit/METS/mets_repository/indexed_mets/");
-        File[] mets = dir.listFiles();
+        File[] metsFiles = dir.listFiles();
         XMLReader xmlReader = XMLReaderFactory.createXMLReader();
         MetsContentHandler metsContentHandler = new MetsContentHandler();
-        for (int i = 0; i < mets.length; i++) {
-//            System.out.println(mets[i]);
-            InputSource inputSource = new InputSource(new FileReader(mets[i]));
+        for (int i = 0; i < metsFiles.length; i++) {
+            if (metsFiles[i].isDirectory()) {
+                continue;
+            }
+            InputSource inputSource = new InputSource(new FileReader(metsFiles[i]));
             xmlReader.setContentHandler(metsContentHandler);
             xmlReader.parse(inputSource);
+            this.mets.add(metsContentHandler.getMets());
         }
-        this.ddcMap = metsContentHandler.getDdcMap();
-        this.hostMap = metsContentHandler.getHostMap();
     }
 
     private void calculatePositions(int radius, List<Region> items) {
         int i = 0;
-        double angle = 2 * Math.PI / items.size() ;
-        for (Region item : items) {            
+        double angle = 2 * Math.PI / items.size();
+        for (Region item : items) {
             int x = (int) (Math.cos(i * angle) * radius);
             int y = (int) (Math.sin(i * angle) * radius);
             i++;
-//            System.out.println(item.getName() + " " + x + ", " + y);
             item.setPosition(new Point(x, y));
         }
 
     }
 
-    private int cirlesPerRadius(int radius, int circleSize) {
+    private int circlesPerRadius(int radius, int circleSize) {
         double circumference = 2 * Math.PI * radius;
         int maxcicles = (int) Math.floor(circumference / circleSize);
         return maxcicles;
@@ -124,72 +127,86 @@ public class TopicMapCreator {
         } catch (IOException ex) {
             Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
         }
-        Region world = new Region(0, "All");
-        world.setChildren(new LinkedList<Region>());
-        LinkedList<String> keys = new LinkedList(ddcMap.keySet());
-        Collections.sort(keys);
-        for (String ddc : keys) {
-            Region r = new Region(ddcMap.get(ddc).size(), ddc);
-            getParent(ddc, world).addChild(r);
-        
+
+        for (Mets m : mets) {
+            Region r = getRegionFor(m);
+            r.getDocuments().put(m, null);
         }
         return world;
     }
 
-    private Region getParent(String child, Region root) {
-        if (child.substring(1, 3).equals("00")) {
-            return root;
+    private Region getRegionFor(Mets m) {
+        return getDdcRegionFor(m);
+    }
+
+    private Region getDdcRegionFor(Mets m) {
+        String ddc = m.getDdcNumber();
+        if (ddc == null) {
+            System.out.println("no ddc for " + m.getPPN());
+            return getWorld();
         }
-        String firstLevel = child.substring(0, 1);
-        for (Region firstChildren : root.getChildren()){
-            if (firstChildren.getName().startsWith(firstLevel)){
-                //TODO check third level
-                return firstChildren;
+        for (Region firstLevel : getWorld().getChildren()) {
+            if (firstLevel.getName().startsWith(ddc.substring(0, 1))) {
+                if (ddc.substring(1, 3).equals("00")) {
+                    return firstLevel;
+                }
+                for (Region secondLevel : firstLevel.getChildren()) {
+                    if (ddc.startsWith(secondLevel.getName().substring(0, 2))) {
+                        return secondLevel;
+                    }
+                }
+                Region r = new Region(0, ddc);
+                firstLevel.addChild(r);
+                return r;
             }
         }
-        Region newRegion = new Region(0, firstLevel+"00");
-        root.addChild(newRegion);
-        return newRegion;
-        
+        Region r = new Region(0, ddc.substring(0, 1) + "00");
+        getWorld().addChild(r);
+        return r;
+    }
+
+    private Region getWorld() {
+        if (this.world == null) {
+            world = new Region(0, "All");
+            world.setChildren(new LinkedList<Region>());
+        }
+        return world;
     }
 
     private void layout(Region r) {
         int size = r.getRadius() * 2 + 40;
         r.setPosition(new Point(size / 2, size / 2));
-
+        System.out.println("image size " + size);
         BufferedImage bi = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = (Graphics2D) bi.getGraphics();
         g.setFont(new Font("Arial", Font.BOLD, 44));
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, size, size);
         g.setStroke(new BasicStroke(5));
-//        g.setColor(Color.red);
         drawRegion(g, r);
         try {
-            ImageIO.write(bi, "png", new File("/tmp/world.png"));
+            ImageIO.write(bi, "png", new File(System.getProperty("java.io.tmpdir"), "world.png"));
         } catch (IOException ex) {
             Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
 
     private void drawRegion(Graphics g, Region r) {
-//        System.out.println(r.getName() + ", " + r.getRadius() + ", " + r.getPosition());
         g.setColor(Color.ORANGE);
         g.drawOval(r.getPosition().x - r.getRadius(), r.getPosition().y - r.getRadius(), r.getRadius() * 2, r.getRadius() * 2);
         g.setColor(Color.blue);
         g.drawString(r.getName(), r.getPosition().x, r.getPosition().y);
-//        System.out.println(r.getDocuments().size() + " for " + r.getName());
-        for (String key : r.getDocuments().keySet()) {
+        for (Mets key : r.getDocuments().keySet()) {
             Point pos = r.getDocuments().get(key);
             g.setColor(Color.GRAY);
             g.drawRect(r.getPosition().x + pos.x, r.getPosition().y + pos.y, 10, 10);
+
         }
         if (r.getChildren() == null) {
             return;
         }
         r.reposChildren();
         for (Region child : r.getChildren()) {
-//            System.out.println(child + " for " +r );
             drawRegion(g, child);
         }
     }
@@ -198,10 +215,10 @@ public class TopicMapCreator {
 
         private int documentNumber;
         private String name;
-        private List<Region> children;
+        private List<Region> children = new LinkedList<Region>();
         private Point position;
         private int radius = 0;
-        private Map<String, Point> documents = new HashMap<String, Point>();
+        private Map<Mets, Point> documents = new HashMap<Mets, Point>();
 
         public Region(int number, String name) {
             documentNumber = number;
@@ -210,34 +227,14 @@ public class TopicMapCreator {
 
         public int getRadius() {
             if (radius < 1) {
+
+                radius = placeDocuments();
                 int placed = 0;
-                radius = 10;
-                while (placed < getDocumentNumber()) {
-                    int currentCircle = cirlesPerRadius(radius, circleSize);
-                    if (currentCircle + placed > getDocumentNumber()) {
-                        currentCircle = getDocumentNumber() - placed;
-                    }
-
-                    double angle = 2 * Math.PI / currentCircle + 1;
-                    for (int i = 0; i < currentCircle; i++) {
-//                        System.out.println("placing " + i);
-                        int x = (int) (Math.cos(i * angle) * radius);
-                        int y = (int) (Math.sin(i * angle) * radius);
-//                        i++;
-                        this.getDocuments().put(currentCircle + "." + i, new Point(x, y));
-                    }
-
-                    placed += currentCircle;
-                    radius += circleSize;
-                } // while documents
-                
-                placed = 0;
-                if (children != null) {
+                if (children != null && children.size() > 0) {
                     Collections.sort(children);
                     int maxChildRadius = children.get(children.size() - 1).getRadius();
                     int placedChildren = 0;
                     List<Region> subList;
-//                                            radius += maxChildRadius + 20;
                     while (placedChildren < children.size()) {
                         int currentChilds = 1;
                         while (true) {
@@ -246,22 +243,20 @@ public class TopicMapCreator {
                                 break;
                             }
                             Region largest = children.get(placed + currentChilds - 1);
-                            int possible = cirlesPerRadius(radius + largest.getRadius(), largest.getRadius());
-                            if (this.getName().equals("All")){
-                                System.out.println(largest.getName()+  ", " + largest.getRadius() + ", " + possible + ", " + radius);
-                            }
+                            int possible = circlesPerRadius(radius + largest.getRadius(), largest.getRadius());
+
                             if (possible < currentChilds) {
                                 break;
                             }
                             currentChilds++;
                         }
-                        
-                        subList = children.subList(placedChildren, currentChilds - 1);
 
-                        radius = radius += subList.get(subList.size() - 1).getRadius() * 2;
-                        if (this.getName().equals("All")){
-                        System.out.println(radius + " contains " + subList);
+                        subList = children.subList(placedChildren, currentChilds - 1);
+                        if (subList.size() < 1) {
+                            continue;
                         }
+                        radius += subList.get(subList.size() - 1).getRadius() * 2;
+
                         calculatePositions(radius, subList);
                         placedChildren += subList.size();
                     }
@@ -271,13 +266,35 @@ public class TopicMapCreator {
             return radius;
         }
 
+        private int placeDocuments() {
+            int currentRadius = 30;
+            List<Mets> docs = new ArrayList<Mets>(getDocuments().keySet());
+
+            for (int i = 0; i < docs.size();) { // increment is in the inner loop
+                int documentsOnCircle = circlesPerRadius(currentRadius, circleSize);
+                if (documentsOnCircle > docs.size() - i) {
+                    documentsOnCircle = docs.size() - i;
+                }
+
+                double angle = 2 * Math.PI / documentsOnCircle + 1;
+                for (int j = 0; j < documentsOnCircle; j++) {
+                    int x = (int) (Math.cos(j * angle) * currentRadius);
+                    int y = (int) (Math.sin(j * angle) * currentRadius);
+
+                    documents.put(docs.get(i), new Point(x, y));
+                    i++;
+                }
+                currentRadius = currentRadius + circleSize;
+            }
+            return currentRadius;
+        }
+
         public void reposChildren() {
             if (children == null) {
                 return;
             }
             for (Region child : children) {
                 Point oldPos = child.getPosition();
-//                System.out.println(child.getName() + " oldPos " + oldPos);
                 child.setPosition(new Point(oldPos.x + this.getPosition().x, oldPos.y + this.getPosition().y));
             }
         }
@@ -314,11 +331,11 @@ public class TopicMapCreator {
             this.position = position;
         }
 
-        public Map<String, Point> getDocuments() {
+        public Map<Mets, Point> getDocuments() {
             return documents;
         }
 
-        public void setDocuments(Map<String, Point> documents) {
+        public void setDocuments(Map<Mets, Point> documents) {
             this.documents = documents;
         }
 
