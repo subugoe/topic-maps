@@ -136,7 +136,9 @@ public class TopicMapCreator {
     }
 
     private Region getRegionFor(Mets m) {
-        return getDdcRegionFor(m);
+        Region r = getDdcRegionFor(m);
+        Region volume = getJournalRegionFor(m, r);
+        return volume;
     }
 
     private Region getDdcRegionFor(Mets m) {
@@ -164,6 +166,25 @@ public class TopicMapCreator {
         getWorld().addChild(r);
         return r;
     }
+    
+    private Region getJournalRegionFor(Mets m, Region ddcRegion){
+        String host = m.getHost();
+        if (host == null || host.trim().length() < 1){
+            System.out.println("no journal for " + m);
+            return ddcRegion;
+        }
+        if (host.equals(m.getDdcNumber())){
+            return ddcRegion;
+        }
+        for (Region child: ddcRegion.getChildren()){
+            if (child.getName().equals(host)){
+                return child;
+            }
+        }
+        Region hostRegion = new Region(0, host);
+        ddcRegion.addChild(hostRegion);
+        return hostRegion;        
+    }
 
     private Region getWorld() {
         if (this.world == null) {
@@ -174,6 +195,7 @@ public class TopicMapCreator {
     }
 
     private void layout(Region r) {
+        System.out.println("doing layout");
         int size = r.getRadius() * 2 + 40;
         r.setPosition(new Point(size / 2, size / 2));
         System.out.println("image size " + size);
@@ -192,10 +214,15 @@ public class TopicMapCreator {
     }
 
     private void drawRegion(Graphics g, Region r) {
-        g.setColor(Color.ORANGE);
+        if (r.getName().startsWith("PPN")){
+            g.setColor(Color.red);
+        }else{
+        g.setColor(Color.ORANGE);}
         g.drawOval(r.getPosition().x - r.getRadius(), r.getPosition().y - r.getRadius(), r.getRadius() * 2, r.getRadius() * 2);
-        g.setColor(Color.blue);
+        if (!r.getName().startsWith("PPN")){
+        g.setColor(Color.blue);        
         g.drawString(r.getName(), r.getPosition().x, r.getPosition().y);
+        }
         for (Mets key : r.getDocuments().keySet()) {
             Point pos = r.getDocuments().get(key);
             g.setColor(Color.GRAY);
@@ -226,8 +253,7 @@ public class TopicMapCreator {
         }
 
         public int getRadius() {
-            if (radius < 1) {
-
+            if (radius < 1) {                
                 radius = placeDocuments();
                 int placed = 0;
                 if (children != null && children.size() > 0) {
@@ -353,7 +379,8 @@ public class TopicMapCreator {
 
         @Override
         public int compareTo(Region o) {
-            if (this.getRadius() > o.getRadius()) {
+            int otherRadius = o.getRadius();
+            if (this.radius > otherRadius) {
                 return 1;
             }
             return -1;
