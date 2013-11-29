@@ -2,6 +2,7 @@ package de.ungoettingen.sub;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -9,8 +10,13 @@ import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.UnsupportedEncodingException;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -23,6 +29,12 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.imageio.ImageIO;
+import org.apache.batik.dom.GenericDOMImplementation;
+import org.apache.batik.svggen.SVGGraphics2D;
+import org.apache.batik.svggen.SVGGraphics2DIOException;
+import org.w3c.dom.DOMImplementation;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
@@ -37,7 +49,6 @@ public class TopicMapCreator {
         TopicMapCreator app = new TopicMapCreator();
         app.run();
     }
-
     private Set<Mets> mets = new HashSet<Mets>();
     private Region world;
 
@@ -60,9 +71,9 @@ public class TopicMapCreator {
             xmlReader.setContentHandler(metsContentHandler);
             xmlReader.parse(inputSource);
             Mets m = metsContentHandler.getMets();
-//            if (true || m.getDdcNumber() != null &&  m.getDdcNumber().startsWith("9")) {         
+            if ( m.getDdcNumber() != null && ! m.getDdcNumber().startsWith("7")) {         
             this.mets.add(m);
-//            }
+            }
         }
     }
 
@@ -196,7 +207,6 @@ public class TopicMapCreator {
         return world;
     }
 
-    
     class OwnRunnable implements Runnable {
 
         private Region c;
@@ -218,10 +228,12 @@ public class TopicMapCreator {
             run.setRegion(c);
             Thread t = new Thread(run);
             t.start();
-            threadpool.add(t);            
+            threadpool.add(t);
+            System.out.println(t + "added for " + c);
         }
-        for (Thread t: threadpool){     
+        for (Thread t : threadpool) {
             try {
+                System.out.println("joining thread " + t);
                 t.join();
             } catch (InterruptedException ex) {
                 Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
@@ -231,18 +243,60 @@ public class TopicMapCreator {
         int size = r.getRadius() * 2 + 40;
         r.setPosition(new Point(size / 2, size / 2));
         System.out.println("image size " + size);
-        BufferedImage bi = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = (Graphics2D) bi.getGraphics();
+        Graphics2D g = getGraphics(size);
         g.setFont(new Font("Arial", Font.BOLD, 44));
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, size, size);
         g.setStroke(new BasicStroke(5));
         drawRegion(g, r);
-        try {
-            ImageIO.write(bi, "png", new File(System.getProperty("java.io.tmpdir"), "world.png"));
-        } catch (IOException ex) {
+        Writer out;
+        try {            
+            out = new OutputStreamWriter(new FileOutputStream(new File("/tmp/world.svg")), "UTF-8");
+            Element root = ((SVGGraphics2D )g).getRoot();
+            root.setAttributeNS(null, "viewBox", "0 0 "+ size + " " + size);
+            ((SVGGraphics2D) g).stream(root, out, true);
+        } catch (UnsupportedEncodingException ex) {
+            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (SVGGraphics2DIOException ex) {
+            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (FileNotFoundException ex) {
             Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
         }
+
+//        try {
+//            ImageIO.write(bi, "png", new File(System.getProperty("java.io.tmpdir"), "world.png"));
+//        } catch (IOException ex) {
+//            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
+//        }
+    }
+
+    private Graphics2D getGraphics(int size) {
+        if (true) {
+            return getSVGGraphics(size);
+        }
+        return getJavaGraphics(size);
+    }
+
+    private Graphics2D getJavaGraphics(int size) {
+        BufferedImage bi = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+        return (Graphics2D) bi.getGraphics();
+    }
+
+    private Graphics2D getSVGGraphics(int size) {
+        // Get a DOMImplementation.
+        DOMImplementation domImpl =
+                GenericDOMImplementation.getDOMImplementation();
+
+        // Create an instance of org.w3c.dom.Document.
+        String svgNS = "http://www.w3.org/2000/svg";
+        Document document = domImpl.createDocument(svgNS, "svg", null);
+
+        // Create an instance of the SVG Generator.
+        SVGGraphics2D svgGenerator = new SVGGraphics2D(document);
+        Element root = svgGenerator.getRoot();
+        root.setAttributeNS(null, "viewBox", "0 0 800 600");
+        svgGenerator.setSVGCanvasSize(new Dimension(500,500));
+        return svgGenerator;
     }
 
     private void drawRegion(Graphics g, Region r) {
@@ -286,8 +340,8 @@ public class TopicMapCreator {
         }
 
         public int getRadius() {
-            
-            LinkedList<Region> l = new LinkedList<Region>();            
+
+            LinkedList<Region> l = new LinkedList<Region>();
             return getRadius(l);
         }
 
