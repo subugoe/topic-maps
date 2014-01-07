@@ -10,25 +10,19 @@ import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.UnsupportedEncodingException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.imageio.ImageIO;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
@@ -36,14 +30,11 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import org.apache.batik.dom.GenericDOMImplementation;
-import org.apache.batik.dom.GenericElementNS;
 import org.apache.batik.dom.svg.SVGDOMImplementation;
 import org.apache.batik.svggen.SVGGraphics2D;
-import org.apache.batik.svggen.SVGGraphics2DIOException;
 import org.w3c.dom.DOMImplementation;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
@@ -51,21 +42,27 @@ import org.xml.sax.helpers.XMLReaderFactory;
 
 public class TopicMapCreator {
 
+    // All process METS files, unsorted and without hierarchy
+    private Set<Mets> mets = new HashSet<Mets>();
+    // the largest region which contains all other
+    private Region world;
+    // the DOM document
+    private Document document;
+    // the first graphics (g) element in the SVG document
+    private Element firstG;
     private int circleSize = 20;
+    // The directory with the METS files
+    private File metsDir;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws SAXException, FileNotFoundException, IOException {
 
         TopicMapCreator app = new TopicMapCreator();
-        app.run();
+        app.run(args);
     }
-    private Set<Mets> mets = new HashSet<Mets>();
-    private Region world;
-    private Document document;
-    private Element firstG;
 
-    private void run() {
-//        Region world = buildTree();
-        Region world = buildTreeFromMets();
+    private void run(String[] args) throws SAXException, FileNotFoundException, IOException {
+        processArgs(args);
+        world = buildTreeFromMets();
         layout(world);
         try {
             write();
@@ -76,24 +73,71 @@ public class TopicMapCreator {
         }
     }
 
-    private void readMETs() throws SAXException, FileNotFoundException, IOException {
-        File dir = new File("/home/jdo/digizeit/METS/mets_repository/indexed_mets/");
-        File[] metsFiles = dir.listFiles();
+    /**
+     * Checks if the parameter of the program is set an valid. If the parameter
+     * is not valid a message is printed to err and the program exists. If the
+     * parameter is missing the status code is "2", if the directory with the
+     * METS files is not valid the status code is "3".
+     *
+     * @param args
+     */
+    private void processArgs(String[] args) {
+        if (args.length != 1) {
+            System.err.println("The programm need the directory with the METS files to parse as first parameter");
+            System.exit(2);
+        }
+        metsDir = new File(args[0]);
+        if (!metsDir.exists()) {
+            System.err.println("The directory '" + metsDir + "' with the METS files does not exits.");
+            System.exit(3);
+        }
+        if (!metsDir.isDirectory()) {
+            System.err.println("'" + metsDir + "' should be a directory containing the METS files.");
+            System.exit(3);
+        }
+        if (!metsDir.canExecute()) {
+            System.err.println("The directory '" + metsDir + "' is not accessible.");
+            System.exit(3);
+        }
+    }
+
+    /**
+     * Reads the METS files in the directory given as first parameter. The files
+     * are not read recursively. All parsed METS files are parsed in the file
+     * <code>mets</code> and are returned by the function.
+     *
+     * @throws SAXException
+     * @throws FileNotFoundException
+     * @throws IOException
+     */
+    private Set<Mets> readMETs() throws SAXException {
+
+        File[] metsFiles = metsDir.listFiles();
         XMLReader xmlReader = XMLReaderFactory.createXMLReader();
         MetsContentHandler metsContentHandler = new MetsContentHandler();
+
         for (int i = 0; i < metsFiles.length; i++) {
-            if (metsFiles[i].isDirectory()) {
-                continue;
-            }
-            InputSource inputSource = new InputSource(new FileReader(metsFiles[i]));
-            xmlReader.setContentHandler(metsContentHandler);
-            xmlReader.parse(inputSource);
-            Mets m = metsContentHandler.getMets();
-            if (true  ) { //TODO || m.getDdcNumber() != null && m.getDdcNumber().startsWith("7")
-//            if (m.getDdcNumber() != null ) {
-                mets.add(m);
+            try {
+                if (metsFiles[i].isDirectory()) {
+                    continue;
+                }
+                InputSource inputSource = new InputSource(new FileReader(metsFiles[i]));
+                xmlReader.setContentHandler(metsContentHandler);
+                xmlReader.parse(inputSource);
+                Mets m = metsContentHandler.getMets();
+                if (true) { //TODO || m.getDdcNumber() != null && m.getDdcNumber().startsWith("7")
+                    //            if (m.getDdcNumber() != null ) {
+                    mets.add(m);
+                }
+            } catch (FileNotFoundException ex) {
+                System.out.println("The file " + metsFiles[i] + " could not be found, skipping. " + ex);
+            } catch (IOException ex) {
+                System.out.println("The file " + metsFiles[i] + " could not be read, skipping. " + ex);
+            } catch (Exception ex) {
+                System.out.println("The file " + metsFiles[i] + "could not be parsed, skipping. " + ex);
             }
         }
+        return mets;
     }
 
     private void calculatePositions(int radius, List<Region> items) {
@@ -114,6 +158,7 @@ public class TopicMapCreator {
         return maxcicles;
     }
 
+    @Deprecated
     private Region buildTree() {
         Region world = new Region(0, "All");
         Region r0 = new Region(0, "Informatik, Informationswissenschaft, allgemeine Werke");
@@ -148,16 +193,15 @@ public class TopicMapCreator {
         return world;
     }
 
-    private Region buildTreeFromMets() {
-        try {
-            readMETs();
-        } catch (SAXException ex) {
-            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (FileNotFoundException ex) {
-            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (IOException ex) {
-            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
-        }
+    /**
+     * Reads the METS files and build a hierarchy of them. Therefor each
+     * {@link Mets} is stored as document in its {@link Region}.
+     *
+     * @return The most general region (world).
+     */
+    private Region buildTreeFromMets() throws SAXException, FileNotFoundException, IOException {
+
+        readMETs();
 
         for (Mets m : mets) {
             Region r = getRegionFor(m);
@@ -168,38 +212,66 @@ public class TopicMapCreator {
         return world;
     }
 
+    /**
+     *
+     * @param m
+     * @return
+     */
     private Region getRegionFor(Mets m) {
-        
+
         Region r = getDdcRegionFor(m);
         Region journal = getJournalRegionFor(m, r);
-        System.out.println(m + " ddc " + r +" journal "+journal);
+        System.out.println(m + " ddc " + r + " journal " + journal);
         return journal;
     }
 
+    /**
+     * Get the DDC number of the METS. The DDC number is read from the METS
+     * file, if there isn't a DDC number a warning is printed to stout and the
+     * Mets is assigned to the region "world". If the region for the DDC does
+     * not exists in the region "world" already it is created and added. Also
+     * all required top level regions are created and inserted.
+     *
+     * @param m
+     * @return
+     */
     private Region getDdcRegionFor(Mets m) {
         String ddc = m.getDdcNumber();
         if (ddc == null) {
             System.out.println("no ddc for " + m.getPPN());
             return getWorld();
         }
+        System.out.println("test " +ddc);
         for (Region firstLevel : getWorld().getChildren()) {
             if (firstLevel.getName().startsWith(ddc.substring(0, 1))) {
                 if (ddc.substring(1, 3).equals("00")) {
                     return firstLevel;
                 }
+                //second level
                 for (Region secondLevel : firstLevel.getChildren()) {
                     if (ddc.startsWith(secondLevel.getName().substring(0, 2))) {
-                        return secondLevel;
+                        if (ddc.substring(2, 3).equals("0")) {
+                            return secondLevel;
+                        }
+                        //third level
+                        for (Region thirdLevel : secondLevel.getChildren()){
+                            if (ddc.equals(thirdLevel.getName())){
+                                return thirdLevel;
+                            }
+                        }
+                        Region r = new Region(0, ddc);
+                        secondLevel.addChild(r);
+                        return r;
                     }
                 }
-                Region r = new Region(0, ddc);
-                firstLevel.addChild(r);
-                return r;
+                Region r = new Region(0, ddc.substring(0,2)+ "0");
+                firstLevel.addChild(r); //second level added, try again
+                return getDdcRegionFor(m);
             }
         }
         Region r = new Region(0, ddc.substring(0, 1) + "00");
-        getWorld().addChild(r);
-        return r;
+        getWorld().addChild(r); // First level added, lets try again.                
+        return getDdcRegionFor(m);
     }
 
     private Region getJournalRegionFor(Mets m, Region ddcRegion) {
@@ -439,7 +511,7 @@ public class TopicMapCreator {
         }
 
         public int getRadius() {
-            
+
             LinkedList<Region> l = new LinkedList<Region>();
             return getRadius(l);
         }
@@ -451,7 +523,7 @@ public class TopicMapCreator {
             }
 //            System.out.println(this + " adding to " + parents);
             parents.add(this);
-       //     System.out.println(parents);
+            //     System.out.println(parents);
             if (radius < 1) {
                 radius = placeDocuments();
                 int placed = 0;
