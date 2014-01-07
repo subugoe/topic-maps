@@ -29,12 +29,21 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.imageio.ImageIO;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import org.apache.batik.dom.GenericDOMImplementation;
+import org.apache.batik.dom.GenericElementNS;
+import org.apache.batik.dom.svg.SVGDOMImplementation;
 import org.apache.batik.svggen.SVGGraphics2D;
 import org.apache.batik.svggen.SVGGraphics2DIOException;
 import org.w3c.dom.DOMImplementation;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
@@ -51,11 +60,20 @@ public class TopicMapCreator {
     }
     private Set<Mets> mets = new HashSet<Mets>();
     private Region world;
+    private Document document;
+    private Element firstG;
 
     private void run() {
 //        Region world = buildTree();
         Region world = buildTreeFromMets();
         layout(world);
+        try {
+            write();
+        } catch (TransformerConfigurationException ex) {
+            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (TransformerException ex) {
+            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
 
     private void readMETs() throws SAXException, FileNotFoundException, IOException {
@@ -71,8 +89,9 @@ public class TopicMapCreator {
             xmlReader.setContentHandler(metsContentHandler);
             xmlReader.parse(inputSource);
             Mets m = metsContentHandler.getMets();
-            if ( m.getDdcNumber() != null && ! m.getDdcNumber().startsWith("7")) {         
-            this.mets.add(m);
+            if (true  ) { //TODO || m.getDdcNumber() != null && m.getDdcNumber().startsWith("7")
+//            if (m.getDdcNumber() != null ) {
+                mets.add(m);
             }
         }
     }
@@ -143,13 +162,17 @@ public class TopicMapCreator {
         for (Mets m : mets) {
             Region r = getRegionFor(m);
             r.getDocuments().put(m, null);
+//            System.out.println(m + "\t" + r);
         }
+//        System.exit(0);
         return world;
     }
 
     private Region getRegionFor(Mets m) {
+        
         Region r = getDdcRegionFor(m);
         Region journal = getJournalRegionFor(m, r);
+        System.out.println(m + " ddc " + r +" journal "+journal);
         return journal;
     }
 
@@ -249,25 +272,39 @@ public class TopicMapCreator {
         g.fillRect(0, 0, size, size);
         g.setStroke(new BasicStroke(5));
         drawRegion(g, r);
+
+
+
         Writer out;
-        try {            
-            out = new OutputStreamWriter(new FileOutputStream(new File("/tmp/world.svg")), "UTF-8");
-            Element root = ((SVGGraphics2D )g).getRoot();
-            root.setAttributeNS(null, "viewBox", "0 0 "+ size + " " + size);
-            ((SVGGraphics2D) g).stream(root, out, true);
-        } catch (UnsupportedEncodingException ex) {
-            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (SVGGraphics2DIOException ex) {
-            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (FileNotFoundException ex) {
-            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
-        }
+//        try {
+//            out = new OutputStreamWriter(new FileOutputStream(new File("/tmp/world.svg")), "UTF-8");
+//            Element root = ((SVGGraphics2D) g).getRoot();
+//            root.setAttributeNS(null, "viewBox", "0 0 " + size + " " + size);
+//            ((SVGGraphics2D) g).stream(root, out, true);
+//        } catch (UnsupportedEncodingException ex) {
+//            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
+//        } catch (SVGGraphics2DIOException ex) {
+//            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
+//        } catch (FileNotFoundException ex) {
+//            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
+//        }
 
 //        try {
 //            ImageIO.write(bi, "png", new File(System.getProperty("java.io.tmpdir"), "world.png"));
 //        } catch (IOException ex) {
 //            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
 //        }
+    }
+
+    private void write() throws TransformerConfigurationException, TransformerException {
+        TransformerFactory transformerFactory = TransformerFactory.newInstance();
+        Transformer transformer = transformerFactory.newTransformer();
+        DOMSource source = new DOMSource(document);
+        File outFile = new File("/var/www/batik.svg");
+
+        StreamResult result = new StreamResult(outFile);
+        transformer.transform(source, new StreamResult(outFile.getPath()));
+
     }
 
     private Graphics2D getGraphics(int size) {
@@ -289,32 +326,48 @@ public class TopicMapCreator {
 
         // Create an instance of org.w3c.dom.Document.
         String svgNS = "http://www.w3.org/2000/svg";
-        Document document = domImpl.createDocument(svgNS, "svg", null);
+        document = domImpl.createDocument(svgNS, "svg", null);
 
         // Create an instance of the SVG Generator.
         SVGGraphics2D svgGenerator = new SVGGraphics2D(document);
-        Element root = svgGenerator.getRoot();
-        root.setAttributeNS(null, "viewBox", "0 0 800 600");
-        svgGenerator.setSVGCanvasSize(new Dimension(500,500));
+        //        root = svgGenerator.getRoot();
+        Element svgNode = document.getDocumentElement();
+
+        svgNode.setAttributeNS(null, "style", "stroke-dasharray:none; shape-rendering:auto; font-family:&apos;Dialog&apos;; text-rendering:auto; fill-opacity:1; color-interpolation:auto; color-rendering:auto; font-size:12; fill:black; stroke:black; image-rendering:auto; stroke-miterlimit:10; stroke-linecap:square; stroke-linejoin:miter; font-style:normal; stroke-width:1; stroke-dashoffset:0; font-weight:normal; stroke-opacity:1;");
+        svgNode.setAttributeNS(null, "viewBox", String.format("0 0 %d %d", size, size));
+        svgNode.setAttributeNS(null, "id", "svgroot");
+        svgNode.setAttributeNS(null, "xmlns:xlink", "http://www.w3.org/1999/xlink");
+
+        firstG = document.createElementNS(svgNS, "g");
+        firstG.setAttributeNS(null, "transform", "translate(0,200)");
+        firstG.setAttributeNS(svgNS, "id", "viewport");
+        svgNode.appendChild(firstG);
+        svgGenerator.setSVGCanvasSize(new Dimension(500, 500));
+        Element scriptNode = document.createElementNS(null, "script");
+        scriptNode.setAttributeNS(null, "xlink:href", "SVGPan.js");
+        scriptNode.setAttributeNS(svgNS, "type", "text/javascript");
+        svgNode.appendChild(scriptNode);
         return svgGenerator;
     }
 
     private void drawRegion(Graphics g, Region r) {
-        if (r.getName().startsWith("PPN")) {
-            g.setColor(Color.red);
-        } else {
-            g.setColor(Color.ORANGE);
-        }
-        g.drawOval(r.getPosition().x - r.getRadius(), r.getPosition().y - r.getRadius(), r.getRadius() * 2, r.getRadius() * 2);
-        if (!r.getName().startsWith("PPN")) {
-            g.setColor(Color.blue);
-            g.drawString(r.getName(), r.getPosition().x, r.getPosition().y);
-        }
-        for (Mets key : r.getDocuments().keySet()) {
-            Point pos = r.getDocuments().get(key);
-            g.setColor(Color.GRAY);
-            g.drawRect(r.getPosition().x + pos.x, r.getPosition().y + pos.y, 10, 10);
+        Element circle = createCircleElement(r);
 
+        firstG.appendChild(circle);
+
+
+        if (!r.getName().startsWith("PPN")) {
+            Element text = createTextElement(r);
+            firstG.appendChild(text);
+        }
+
+        String svgNS = SVGDOMImplementation.SVG_NAMESPACE_URI;
+        for (Mets key : r.getDocuments().keySet()) {
+
+            Point pos = r.getDocuments().get(key);
+
+            Element rec = createRectElem(r, pos, key);
+            firstG.appendChild(rec);
         }
         if (r.getChildren() == null) {
             return;
@@ -323,6 +376,52 @@ public class TopicMapCreator {
         for (Region child : r.getChildren()) {
             drawRegion(g, child);
         }
+    }
+
+    private Element createRectElem(Region r, Point pos, Mets m) {
+        String svgNS = SVGDOMImplementation.SVG_NAMESPACE_URI;
+        Element e = document.createElementNS(svgNS, "rect");
+        e.setAttributeNS(svgNS, "id", m.getPPN());
+        e.setAttributeNS(svgNS, "type", "");
+        e.setAttributeNS(svgNS, "x", Integer.toString(r.getPosition().x + pos.x));
+        e.setAttributeNS(svgNS, "y", Integer.toString(r.getPosition().y + pos.y));
+        e.setAttributeNS(svgNS, "width", "10");
+        e.setAttributeNS(svgNS, "height", "10");
+        e.setAttributeNS(svgNS, "style", "fill:none; stroke:gray; stroke-width:5;");
+        return e;
+    }
+
+    private Element createTextElement(Region r) {
+//        g.setColor(Color.blue);
+//            g.drawString(r.getName(), r.getPosition().x, r.getPosition().y);
+        String svgNS = SVGDOMImplementation.SVG_NAMESPACE_URI;
+        Element e = document.createElementNS(svgNS, "text");
+        e.setAttributeNS(svgNS, "x", Integer.toString(r.getPosition().x));
+        e.setAttributeNS(svgNS, "y", Integer.toString(r.getPosition().y));
+        e.setAttributeNS(svgNS, "style", "fill:blue; stroke:none; stroke-width:5;");
+        e.appendChild(document.createTextNode(r.getName()));
+        return e;
+    }
+
+    private Element createCircleElement(Region r) {
+        //g.drawOval(r.getPosition().x - r.getRadius(), r.getPosition().y - r.getRadius(), r.getRadius() * 2, r.getRadius() * 2);
+        String svgNS = SVGDOMImplementation.SVG_NAMESPACE_URI;
+        Element e = document.createElementNS(svgNS, "circle");
+
+        e.setAttributeNS(svgNS, "r", Integer.toString(r.getRadius()));
+        e.setAttributeNS(svgNS, "cx", Integer.toString(r.getPosition().x));
+        e.setAttributeNS(svgNS, "cy", Integer.toString(r.getPosition().y));
+        String color;
+        if (r.getName().startsWith("PPN")) {
+            color = "red";
+            e.setAttributeNS(svgNS, "type", "journal");
+        } else {
+            color = "rgb(255,200,0)";
+            e.setAttributeNS(svgNS, "type", "ddc_topic");
+        }
+
+        e.setAttributeNS(svgNS, "style", String.format("fill:none; stroke:%s; stroke-width:5;", color));
+        return e;
     }
 
     class Region implements Comparable<Region> {
@@ -340,7 +439,7 @@ public class TopicMapCreator {
         }
 
         public int getRadius() {
-
+            
             LinkedList<Region> l = new LinkedList<Region>();
             return getRadius(l);
         }
@@ -352,6 +451,7 @@ public class TopicMapCreator {
             }
 //            System.out.println(this + " adding to " + parents);
             parents.add(this);
+       //     System.out.println(parents);
             if (radius < 1) {
                 radius = placeDocuments();
                 int placed = 0;
