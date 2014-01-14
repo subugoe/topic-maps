@@ -61,6 +61,7 @@ public class TopicMapCreator {
     }
 
     private void run(String[] args) throws SAXException, FileNotFoundException, IOException {
+        long start = System.currentTimeMillis();
         processArgs(args);
         world = buildTreeFromMets();
         layout(world);
@@ -71,6 +72,7 @@ public class TopicMapCreator {
         } catch (TransformerException ex) {
             Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
         }
+        System.out.println("runtime " + ((System.currentTimeMillis() - start) / 1000) + "ms");
     }
 
     /**
@@ -125,16 +127,17 @@ public class TopicMapCreator {
                 xmlReader.setContentHandler(metsContentHandler);
                 xmlReader.parse(inputSource);
                 Mets m = metsContentHandler.getMets();
-                if (true) { //TODO || m.getDdcNumber() != null && m.getDdcNumber().startsWith("7")
-                    //            if (m.getDdcNumber() != null ) {
-                    mets.add(m);
-                }
+                mets.add(m);
+//                if (true || m.getDdcNumber() != null && m.getDdcNumber().startsWith("7") || m.getPPN().contains("487748506")) { //TODO || m.getDdcNumber() != null && m.getDdcNumber().startsWith("7")
+//                    //            if (m.getDdcNumber() != null ) {
+//                    mets.add(m);
+//                }
             } catch (FileNotFoundException ex) {
                 System.out.println("The file " + metsFiles[i] + " could not be found, skipping. " + ex);
             } catch (IOException ex) {
                 System.out.println("The file " + metsFiles[i] + " could not be read, skipping. " + ex);
             } catch (Exception ex) {
-                System.out.println("The file " + metsFiles[i] + "could not be parsed, skipping. " + ex);
+                System.out.println("The file " + metsFiles[i] + " could not be parsed, skipping. " + ex);
             }
         }
         return mets;
@@ -206,10 +209,27 @@ public class TopicMapCreator {
         for (Mets m : mets) {
             Region r = getRegionFor(m);
             r.getDocuments().put(m, null);
-//            System.out.println(m + "\t" + r);
         }
+//        printTree(world, 0);
 //        System.exit(0);
         return world;
+    }
+
+    private void printTree(Region r, int level) {
+        for (int i = 0; i < level; i++) {
+            System.out.print("  ");
+        }
+        System.out.println(r);
+        for (Mets m : r.getDocuments().keySet()) {
+            for (int i = 0; i < level; i++) {
+                System.out.print("  ");
+            }
+            System.out.println("- " + m);
+        }
+        for (Region child : r.getChildren()) {
+            printTree(child, level + 2);
+        }
+
     }
 
     /**
@@ -221,7 +241,6 @@ public class TopicMapCreator {
 
         Region r = getDdcRegionFor(m);
         Region journal = getJournalRegionFor(m, r);
-        System.out.println(m + " ddc " + r + " journal " + journal);
         return journal;
     }
 
@@ -241,7 +260,6 @@ public class TopicMapCreator {
             System.out.println("no ddc for " + m.getPPN());
             return getWorld();
         }
-        System.out.println("test " +ddc);
         for (Region firstLevel : getWorld().getChildren()) {
             if (firstLevel.getName().startsWith(ddc.substring(0, 1))) {
                 if (ddc.substring(1, 3).equals("00")) {
@@ -254,8 +272,8 @@ public class TopicMapCreator {
                             return secondLevel;
                         }
                         //third level
-                        for (Region thirdLevel : secondLevel.getChildren()){
-                            if (ddc.equals(thirdLevel.getName())){
+                        for (Region thirdLevel : secondLevel.getChildren()) {
+                            if (ddc.equals(thirdLevel.getName())) {
                                 return thirdLevel;
                             }
                         }
@@ -264,7 +282,7 @@ public class TopicMapCreator {
                         return r;
                     }
                 }
-                Region r = new Region(0, ddc.substring(0,2)+ "0");
+                Region r = new Region(0, ddc.substring(0, 2) + "0");
                 firstLevel.addChild(r); //second level added, try again
                 return getDdcRegionFor(m);
             }
@@ -274,15 +292,26 @@ public class TopicMapCreator {
         return getDdcRegionFor(m);
     }
 
+    /**
+     * Gets the region for the host (journal) of the {@link Mets} inside of the
+     * region of the given DDC. If the host is not present in the DDC region
+     * yet, it is created.
+     *
+     * @param m the Mets to place
+     * @param ddcRegion the DDC region where the host should be searched or
+     * created.
+     * @return The host region for the Mets.
+     */
     private Region getJournalRegionFor(Mets m, Region ddcRegion) {
         String host = m.getHost();
         if (host == null || host.trim().length() < 1) {
             System.out.println("no journal for " + m);
             return ddcRegion;
         }
-        if (host.equals(m.getDdcNumber())) {
-            return ddcRegion;
-        }
+//        if (host.equals(m.getDdcNumber())) {
+//            System.out.println("?????");
+//            return ddcRegion;
+//        }
         for (Region child : ddcRegion.getChildren()) {
             if (child.getName().equals(host)) {
                 return child;
@@ -290,8 +319,8 @@ public class TopicMapCreator {
         }
         Region hostRegion = new Region(0, host);
         ddcRegion.addChild(hostRegion);
+
         return hostRegion;
-//        return ddcRegion;
     }
 
     private Region getWorld() {
@@ -315,8 +344,13 @@ public class TopicMapCreator {
         }
     }
 
+    /**
+     * Positions all elements of the given region. For each child a separate
+     * thread is started to do the layout in parallel.
+     *
+     * @param r
+     */
     private void layout(Region r) {
-        System.out.println("doing layout");
         HashSet<Thread> threadpool = new HashSet<Thread>();
         for (Region c : r.getChildren()) {
             OwnRunnable run = new OwnRunnable();
@@ -324,11 +358,10 @@ public class TopicMapCreator {
             Thread t = new Thread(run);
             t.start();
             threadpool.add(t);
-            System.out.println(t + "added for " + c);
         }
         for (Thread t : threadpool) {
             try {
-                System.out.println("joining thread " + t);
+//                System.out.println("joining thread " + t);
                 t.join();
             } catch (InterruptedException ex) {
                 Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
@@ -343,54 +376,49 @@ public class TopicMapCreator {
         g.setColor(Color.WHITE);
         g.fillRect(0, 0, size, size);
         g.setStroke(new BasicStroke(5));
+
         drawRegion(g, r);
 
 
 
-        Writer out;
-//        try {
-//            out = new OutputStreamWriter(new FileOutputStream(new File("/tmp/world.svg")), "UTF-8");
-//            Element root = ((SVGGraphics2D) g).getRoot();
-//            root.setAttributeNS(null, "viewBox", "0 0 " + size + " " + size);
-//            ((SVGGraphics2D) g).stream(root, out, true);
-//        } catch (UnsupportedEncodingException ex) {
-//            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
-//        } catch (SVGGraphics2DIOException ex) {
-//            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
-//        } catch (FileNotFoundException ex) {
-//            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
-//        }
-
-//        try {
-//            ImageIO.write(bi, "png", new File(System.getProperty("java.io.tmpdir"), "world.png"));
-//        } catch (IOException ex) {
-//            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
-//        }
     }
 
+    /**
+     * Writes the generated DOM to a SVG file. The document to write out should
+     * be saved in the field {
+     *
+     * @ #document}
+     *
+     * @throws TransformerConfigurationException
+     * @throws TransformerException
+     */
     private void write() throws TransformerConfigurationException, TransformerException {
         TransformerFactory transformerFactory = TransformerFactory.newInstance();
         Transformer transformer = transformerFactory.newTransformer();
         DOMSource source = new DOMSource(document);
         File outFile = new File("/var/www/batik.svg");
 
-        StreamResult result = new StreamResult(outFile);
         transformer.transform(source, new StreamResult(outFile.getPath()));
 
     }
 
     private Graphics2D getGraphics(int size) {
-        if (true) {
-            return getSVGGraphics(size);
-        }
-        return getJavaGraphics(size);
+        return getSVGGraphics(size);
     }
+//
+//    private Graphics2D getJavaGraphics(int size) {
+//        BufferedImage bi = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+//        return (Graphics2D) bi.getGraphics();
+//    }
+//
 
-    private Graphics2D getJavaGraphics(int size) {
-        BufferedImage bi = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
-        return (Graphics2D) bi.getGraphics();
-    }
-
+    /**
+     * Generates an default SVG document. The document has the given size (as
+     * quadrat) and contains the default elements (g, viewbox) but no content.
+     *
+     * @param size
+     * @return
+     */
     private Graphics2D getSVGGraphics(int size) {
         // Get a DOMImplementation.
         DOMImplementation domImpl =
@@ -422,6 +450,12 @@ public class TopicMapCreator {
         return svgGenerator;
     }
 
+    /**
+     * Adds all elements of the Region to the SVG DOM.
+     *
+     * @param g
+     * @param r
+     */
     private void drawRegion(Graphics g, Region r) {
         Element circle = createCircleElement(r);
 
@@ -464,8 +498,7 @@ public class TopicMapCreator {
     }
 
     private Element createTextElement(Region r) {
-//        g.setColor(Color.blue);
-//            g.drawString(r.getName(), r.getPosition().x, r.getPosition().y);
+
         String svgNS = SVGDOMImplementation.SVG_NAMESPACE_URI;
         Element e = document.createElementNS(svgNS, "text");
         e.setAttributeNS(svgNS, "x", Integer.toString(r.getPosition().x));
@@ -510,60 +543,71 @@ public class TopicMapCreator {
             this.name = name;
         }
 
-        public int getRadius() {
-
-            LinkedList<Region> l = new LinkedList<Region>();
-            return getRadius(l);
-        }
-
-        private int getRadius(List<Region> parents) {
-            if (parents.contains(this)) {
-                System.out.println(parents + " + " + this);
-                System.exit(33);
+        /**
+         * Calculates the radius of a region. First the documents of the region
+         * are placed on circles. Next the sub regions are placed on larger
+         * circles. The radius of the circles is chosen in a way, that the
+         * largest child fits on the radius. In order to place the sub regions
+         * their radius has to be determined, so that all downstream regions are
+         * calculated recursively.
+         *
+         * @return
+         */
+        private int getRadius() {
+            if (radius > 0) {
+                return radius;
             }
-//            System.out.println(this + " adding to " + parents);
-            parents.add(this);
-            //     System.out.println(parents);
-            if (radius < 1) {
-                radius = placeDocuments();
-                int placed = 0;
-                if (children != null && children.size() > 0) {
-                    Collections.sort(children);
-                    int maxChildRadius = children.get(children.size() - 1).getRadius(parents);
-                    int placedChildren = 0;
-                    List<Region> subList;
-                    while (placedChildren < children.size()) {
-                        int currentChilds = 1;
-                        while (true) {
-                            if (currentChilds > children.size()) {
-                                // there are no more children to place
-                                break;
-                            }
+            radius = placeDocuments();
 
-                            Region largest = children.get(placed + currentChilds - 1);
-                            int largestRadius = largest.getRadius();
-                            int possible = circlesPerRadius(radius + largestRadius, largestRadius);
+            if (children != null && children.size() > 0) {
+                int overallPlaced = 0; // number of children placed, independed of the circle
 
-                            if (possible < currentChilds) {
-                                break;
-                            }
-                            currentChilds++;
+                Collections.sort(children);
+                int maxChildRadius = children.get(children.size() - 1).getRadius();
+
+                int placedChildren = 0;
+                List<Region> subList;
+                while (placedChildren < children.size()) {
+
+                    int currentChild = 1;
+                    while (true) {
+                        if (currentChild > children.size()) {
+                            // there are no more children to place
+                            break;
                         }
 
-                        subList = children.subList(placedChildren, currentChilds - 1);
-                        if (subList.size() < 1) {
-                            continue;
+                        Region largest = children.get(overallPlaced + currentChild - 1);
+                        int largestRadius = largest.getRadius();
+                        int possible = circlesPerRadius(radius + largestRadius, largestRadius);
+                        currentChild++;
+                        if (possible < currentChild) {
+                            break;
                         }
-                        radius += subList.get(subList.size() - 1).getRadius() * 2;
-                        calculatePositions(radius, subList);
-                        placedChildren += subList.size();
+
                     }
-                    radius += maxChildRadius;
+                    subList = children.subList(placedChildren, currentChild - 1);
+                    if (subList.size() < 1) {
+                        System.out.println("error sublist of children to place is empty");
+                        continue;
+                    }
+                    radius += subList.get(subList.size() - 1).getRadius() * 2;
+                    calculatePositions(radius, subList);
+
+                    placedChildren += subList.size();
                 }
+                radius += maxChildRadius;
             }
+
             return radius;
         }
 
+        /**
+         * Place the documents of the region in the inner circles. The size of a
+         * document symbol is fixed and defined in the field {
+         *
+         * @ #circleSize}.
+         * @return
+         */
         private int placeDocuments() {
             int currentRadius = 30;
             List<Mets> docs = new ArrayList<Mets>(getDocuments().keySet());
@@ -587,6 +631,10 @@ public class TopicMapCreator {
             return currentRadius;
         }
 
+        /**
+         * Reposition the children relative to the new position of the region.
+         *
+         */
         public void reposChildren() {
             if (children == null) {
                 return;
