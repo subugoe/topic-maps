@@ -1,4 +1,4 @@
-package de.ungoettingen.sub;
+package de.unigoettingen.sub;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -7,12 +7,10 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -64,7 +62,12 @@ public class TopicMapCreator {
         long start = System.currentTimeMillis();
         processArgs(args);
         world = buildTreeFromMets();
+        writeDotFile(world);
+        System.out.println("donw");
+        System.exit(0);
+        System.out.println("processed METS " + (System.currentTimeMillis()-start) + "ms");
         layout(world);
+
         try {
             write();
         } catch (TransformerConfigurationException ex) {
@@ -72,7 +75,7 @@ public class TopicMapCreator {
         } catch (TransformerException ex) {
             Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
         }
-        System.out.println("runtime " + ((System.currentTimeMillis() - start) / 1000) + "ms");
+        System.out.println("runtime " + ((System.currentTimeMillis() - start)) + " ms");
     }
 
     /**
@@ -231,7 +234,18 @@ public class TopicMapCreator {
         }
 
     }
-
+    
+    private void writeDotFile(Region r){
+        System.out.println("graph world {");
+        writeDotLine(r);
+        System.out.println("}");
+    }
+    private void writeDotLine(Region r){
+        for (Region child : r.getChildren()){
+            System.out.println(r.getName() + " -- " + child.getName()+";");            
+            writeDotLine(child);
+        }
+    }
     /**
      *
      * @param m
@@ -396,7 +410,7 @@ public class TopicMapCreator {
         TransformerFactory transformerFactory = TransformerFactory.newInstance();
         Transformer transformer = transformerFactory.newTransformer();
         DOMSource source = new DOMSource(document);
-        File outFile = new File("/var/www/batik.svg");
+        File outFile = new File("/var/www/topics.svg");
 
         transformer.transform(source, new StreamResult(outFile.getPath()));
 
@@ -468,12 +482,16 @@ public class TopicMapCreator {
         }
 
         String svgNS = SVGDOMImplementation.SVG_NAMESPACE_URI;
+        Element gElement = document.createElementNS(svgNS, "g");
+        gElement.setAttributeNS(null, "display", "none");
+        firstG.appendChild(gElement);
         for (Mets key : r.getDocuments().keySet()) {
 
             Point pos = r.getDocuments().get(key);
 
             Element rec = createRectElem(r, pos, key);
-            firstG.appendChild(rec);
+            gElement.appendChild(rec);
+//            firstG.appendChild(rec);
         }
         if (r.getChildren() == null) {
             return;
@@ -709,7 +727,6 @@ public class TopicMapCreator {
             if (ownRadius > otherRadius) {
                 return 1;
             }
-
             return -1;
         }
     }

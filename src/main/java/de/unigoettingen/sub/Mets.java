@@ -1,4 +1,4 @@
-package de.ungoettingen.sub;
+package de.unigoettingen.sub;
 
 /**
  *

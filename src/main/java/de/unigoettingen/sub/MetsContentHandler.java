@@ -1,4 +1,4 @@
-package de.ungoettingen.sub;
+package de.unigoettingen.sub;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
