@@ -236,7 +236,8 @@ public class TopicMapCreator {
     private void writeDotFile(Region r) {
         try {
             BufferedWriter fw = new BufferedWriter(new FileWriter(new File(System.getProperty("java.io.tmpdir"), "topicMaps.dot")));
-            fw.write("digraph world {\n");
+            fw.write("graph world {\n");
+            fw.write("node [id=\"\\N\"];edge [id=\"\\T-\\H\"];");
             int cluster =1;
             HashMap<String, String> clusterMap = new HashMap<String, String>();
             for (Region island : r.getChildren()) {
@@ -258,9 +259,11 @@ public class TopicMapCreator {
 
     private void writeDotLine(Region r, BufferedWriter fw, int cluster, Map<String, String> clusterMap) throws IOException {
         for (Region child : r.getChildren()) {
-            fw.write(String.format("%s -> %s ;\n", r.getName(), child.getName()));
-            clusterMap.put(r.getName(), String.format(" [cluster=\"%s\", id=\"%s\"];\n", cluster, r.getName()));
-            clusterMap.put(child.getName(), String.format(" [cluster=\"%s\", id=\"%s\"];\n", cluster, child.getName()));
+            fw.write(String.format("%s -- %s ;\n", r.getName(), child.getName()));
+            clusterMap.put(r.getName(), String.format(" [cluster=\"%s\"];\n", cluster));
+            clusterMap.put(child.getName(), String.format(" [cluster=\"%s\"];\n", cluster));
+//            clusterMap.put(r.getName(), String.format(" [cluster=\"%s\", id=\"%s\"];\n", cluster, r.getName()));
+//            clusterMap.put(child.getName(), String.format(" [cluster=\"%s\", id=\"%s\"];\n", cluster, child.getName()));
             writeDotLine(child, fw, cluster, clusterMap);
         }
     }
