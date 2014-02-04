@@ -7,9 +7,11 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -63,9 +65,7 @@ public class TopicMapCreator {
         processArgs(args);
         world = buildTreeFromMets();
         writeDotFile(world);
-        System.out.println("donw");
-        System.exit(0);
-        System.out.println("processed METS " + (System.currentTimeMillis()-start) + "ms");
+        System.out.println("processed METS " + (System.currentTimeMillis() - start) + "ms");
         layout(world);
 
         try {
@@ -208,7 +208,6 @@ public class TopicMapCreator {
     private Region buildTreeFromMets() throws SAXException, FileNotFoundException, IOException {
 
         readMETs();
-
         for (Mets m : mets) {
             Region r = getRegionFor(m);
             r.getDocuments().put(m, null);
@@ -232,20 +231,40 @@ public class TopicMapCreator {
         for (Region child : r.getChildren()) {
             printTree(child, level + 2);
         }
+    }
 
-    }
-    
-    private void writeDotFile(Region r){
-        System.out.println("graph world {");
-        writeDotLine(r);
-        System.out.println("}");
-    }
-    private void writeDotLine(Region r){
-        for (Region child : r.getChildren()){
-            System.out.println(r.getName() + " -- " + child.getName()+";");            
-            writeDotLine(child);
+    private void writeDotFile(Region r) {
+        try {
+            BufferedWriter fw = new BufferedWriter(new FileWriter(new File(System.getProperty("java.io.tmpdir"), "topicMaps.dot")));
+            fw.write("digraph world {\n");
+            int cluster =1;
+            HashMap<String, String> clusterMap = new HashMap<String, String>();
+            for (Region island : r.getChildren()) {
+//                fw.write("subgraph sub_"+ island.getName() +" {\n");
+                
+                    writeDotLine(island, fw, cluster, clusterMap);
+                
+                cluster++;
+            }
+            for (String key :clusterMap.keySet()){
+                fw.write(key + clusterMap.get(key));
+            }
+            fw.write("}\n");
+            fw.close();
+        } catch (IOException ex) {
+            Logger.getLogger(TopicMapCreator.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
+
+    private void writeDotLine(Region r, BufferedWriter fw, int cluster, Map<String, String> clusterMap) throws IOException {
+        for (Region child : r.getChildren()) {
+            fw.write(String.format("%s -> %s ;\n", r.getName(), child.getName()));
+            clusterMap.put(r.getName(), String.format(" [cluster=\"%s\", id=\"%s\"];\n", cluster, r.getName()));
+            clusterMap.put(child.getName(), String.format(" [cluster=\"%s\", id=\"%s\"];\n", cluster, child.getName()));
+            writeDotLine(child, fw, cluster, clusterMap);
+        }
+    }
+
     /**
      *
      * @param m
@@ -392,9 +411,6 @@ public class TopicMapCreator {
         g.setStroke(new BasicStroke(5));
 
         drawRegion(g, r);
-
-
-
     }
 
     /**
