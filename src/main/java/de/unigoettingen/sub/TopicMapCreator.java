@@ -59,6 +59,7 @@ public class TopicMapCreator {
         TopicMapCreator app = new TopicMapCreator();
         app.run(args);
     }
+    private DDCResolver ddcResolver;
 
     private void run(String[] args) throws SAXException, FileNotFoundException, IOException {
         long start = System.currentTimeMillis();
@@ -238,17 +239,17 @@ public class TopicMapCreator {
             BufferedWriter fw = new BufferedWriter(new FileWriter(new File(System.getProperty("java.io.tmpdir"), "topicMaps.dot")));
             fw.write("graph world {\n");
             fw.write("node [id=\"\\N\"];edge [id=\"\\T-\\H\"];");
-            int cluster =1;
+            int cluster = 1;
             HashMap<String, String> clusterMap = new HashMap<String, String>();
             for (Region island : r.getChildren()) {
-//                fw.write("subgraph sub_"+ island.getName() +" {\n");
-                
-                    writeDotLine(island, fw, cluster, clusterMap);
-                
+                fw.write("subgraph sub_" + island.getName() + " {\n");
+                writeDotLine(island, fw, cluster, clusterMap);
+                fw.write("}\n");
                 cluster++;
             }
-            for (String key :clusterMap.keySet()){
+            for (String key : clusterMap.keySet()) {
                 fw.write(key + clusterMap.get(key));
+
             }
             fw.write("}\n");
             fw.close();
@@ -258,12 +259,12 @@ public class TopicMapCreator {
     }
 
     private void writeDotLine(Region r, BufferedWriter fw, int cluster, Map<String, String> clusterMap) throws IOException {
+        
         for (Region child : r.getChildren()) {
             fw.write(String.format("%s -- %s ;\n", r.getName(), child.getName()));
-            clusterMap.put(r.getName(), String.format(" [cluster=\"%s\"];\n", cluster));
+            clusterMap.put(r.getName(), String.format(" [cluster=\"%s\", label=\"%s\"];\n", cluster, getDDCResolver().getLabelForClass(r.getName())));
+            
             clusterMap.put(child.getName(), String.format(" [cluster=\"%s\"];\n", cluster));
-//            clusterMap.put(r.getName(), String.format(" [cluster=\"%s\", id=\"%s\"];\n", cluster, r.getName()));
-//            clusterMap.put(child.getName(), String.format(" [cluster=\"%s\", id=\"%s\"];\n", cluster, child.getName()));
             writeDotLine(child, fw, cluster, clusterMap);
         }
     }
@@ -566,6 +567,12 @@ public class TopicMapCreator {
         return e;
     }
 
+    private DDCResolver getDDCResolver(){
+        if (ddcResolver == null){
+            ddcResolver = new DDCResolver();
+        }
+        return ddcResolver;
+    }
     class Region implements Comparable<Region> {
 
         private int documentNumber;
@@ -749,4 +756,5 @@ public class TopicMapCreator {
             return -1;
         }
     }
+    
 }
