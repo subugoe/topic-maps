@@ -36,6 +36,7 @@ public class MeDASClient {
         String path = "documents/";
         WebResource webResource = client.resource(BASE_URI);
         webResource = webResource.path(path);        
+//        webResource = webResource.queryParam("skip", "0").queryParam("limit", "5000");
         Docs response = (Docs) webResource.accept(MediaType.APPLICATION_JSON).get(Docs.class);
         
         return response;

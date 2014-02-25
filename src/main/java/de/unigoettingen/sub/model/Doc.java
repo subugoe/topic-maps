@@ -2,7 +2,6 @@ package de.unigoettingen.sub.model;
 
 import java.util.Set;
 import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlElementWrapper;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlType;
 
@@ -27,6 +26,58 @@ public class Doc {
     private String fulltext;
     private Set<RelatedItem> relatedItems;
     private Set<Classification> classifications;
+
+    /**
+     * The PPN of the parent item. E. g. the journal a volume belongs to. If
+     * there is no host item or it has no PPN
+     * <code>null</code> is returned.
+     *
+     * @return The PPN of the parent, or <code>null</code>
+     */
+    public String getHostPPN() {
+        if (relatedItems == null) {
+            return null;
+        }
+        for (RelatedItem relItem : relatedItems) {
+            return relItem.getRecordIdentifier();
+        }
+        return null;
+    }
+
+    /**
+     * Get the value of the classification according to the DDC standard. If no
+     * classification at all or none in the DDC style is available
+     * <code>null</code> is returned.
+     *
+     * @return The value of the DDC classification or <code>null</code>
+     */
+    public String getDDC() {
+        // return value or the classification object. If the authority is only the type, we don't need it.
+        if (classifications == null) {
+            // required?
+            return null;
+        }
+        for (Classification c : classifications) {
+            if ("dz".equals(c.getAuthority())) {
+                return c.getValue();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Gets only the identifier of the DDC classification without the label or
+     * <code>null</code> if no DDC classification could be found.
+     *
+     * @return The DDC number or <code>null</code>
+     */
+    public String getDDCNumber() {
+        String ddc = getDDC();
+        if (ddc == null) {
+            return null;
+        }
+        return ddc.split(" ")[0];
+    }
 
     public String getDocid() {
         return docid;

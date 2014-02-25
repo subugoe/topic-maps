@@ -10,6 +10,7 @@ public class Mets {
     private String PPN;
     private String host;
     private String ddcNumber;
+    private String medasID;
 
     public String getPPN() {
         return PPN;
@@ -37,4 +38,11 @@ public class Mets {
     public String toString(){
         return PPN;
     }       
+
+    public String getMedasID() {
+        return medasID;
+    }
+    public void setMedasID(String id){
+        this.medasID = id;
+    }
 }

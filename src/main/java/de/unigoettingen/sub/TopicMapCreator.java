@@ -1,5 +1,6 @@
 package de.unigoettingen.sub;
 
+import de.unigoettingen.sub.model.Doc;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -65,6 +66,7 @@ public class TopicMapCreator {
         long start = System.currentTimeMillis();
         processArgs(args);
         world = buildTreeFromMets();
+        
         writeDotFile(world);
         System.out.println("processed METS " + (System.currentTimeMillis() - start) + "ms");
         layout(world);
@@ -90,7 +92,8 @@ public class TopicMapCreator {
     private void processArgs(String[] args) {
         if (args.length != 1) {
             System.err.println("The programm need the directory with the METS files to parse as first parameter");
-            System.exit(2);
+//            System.exit(2);
+            return;
         }
         metsDir = new File(args[0]);
         if (!metsDir.exists()) {
@@ -147,6 +150,33 @@ public class TopicMapCreator {
         return mets;
     }
 
+    private Set<Mets> readMETsFromMeDAS() {
+        mets = new HashSet<Mets>();
+        MeDASClient meDAS = new MeDASClient();
+        Set<Doc> allDocs = meDAS.getAllDocuments().getDocs();
+        for (Doc doc : allDocs) {
+            if (doc.getDDC() != null){ //FIXME remove again
+            mets.add(createMetsFromDoc(doc));
+            }
+        }
+        return mets;
+    }
+
+    private Mets createMetsFromDoc(Doc doc) {
+        Mets m = new Mets();
+        m.setMedasID(doc.getDocid());
+//        if (doc.getClassifications() != null && doc.getClassifications().size() > 0) {
+//            m.setDdcNumber(doc.getClassifications().iterator().next().getValue());
+//        }
+        m.setDdcNumber(doc.getDDCNumber());        
+//        if (doc.getRelatedItems() != null && doc.getRelatedItems().size() > 0) {
+//            m.setHost(doc.getRelatedItems().iterator().next().getHost());
+//        }
+        m.setHost(doc.getHostPPN());
+        m.setPPN(doc.getId().getValue());
+        return m;
+    }
+
     private void calculatePositions(int radius, List<Region> items) {
         int i = 0;
         double angle = 2 * Math.PI / items.size();
@@ -201,14 +231,15 @@ public class TopicMapCreator {
     }
 
     /**
-     * Reads the METS files and build a hierarchy of them. Therefor each
+     * Reads the METS files and build a hierarchy of them. Therefore each
      * {@link Mets} is stored as document in its {@link Region}.
      *
      * @return The most general region (world).
      */
     private Region buildTreeFromMets() throws SAXException, FileNotFoundException, IOException {
 
-        readMETs();
+//        readMETs();
+        readMETsFromMeDAS();
         for (Mets m : mets) {
             Region r = getRegionFor(m);
             r.getDocuments().put(m, null);
@@ -227,7 +258,7 @@ public class TopicMapCreator {
             for (int i = 0; i < level; i++) {
                 System.out.print("  ");
             }
-            System.out.println("- " + m);
+            System.out.println(" - " + m);
         }
         for (Region child : r.getChildren()) {
             printTree(child, level + 2);
@@ -259,16 +290,25 @@ public class TopicMapCreator {
     }
 
     private void writeDotLine(Region r, BufferedWriter fw, int cluster, Map<String, String> clusterMap) throws IOException {
-        
+
         for (Region child : r.getChildren()) {
             fw.write(String.format("%s -- %s ;\n", r.getName(), child.getName()));
             clusterMap.put(r.getName(), String.format(" [cluster=\"%s\", label=\"%s\"];\n", cluster, getDDCResolver().getLabelForClass(r.getName())));
-            
+
             clusterMap.put(child.getName(), String.format(" [cluster=\"%s\"];\n", cluster));
             writeDotLine(child, fw, cluster, clusterMap);
         }
+        writeDocumentToDot(r, fw, cluster, clusterMap);
     }
-
+    
+    private void writeDocumentToDot(Region r,BufferedWriter fw,int cluster, Map<String, String> clusterMap ) throws IOException{
+        
+        for (Mets m : r.getDocuments().keySet()){
+            String ppn = m.getPPN().replaceAll("-", "_");
+            fw.write(String.format("%s -- %s ;\n", r.getName(), ppn));
+            clusterMap.put(ppn, String.format(" [cluster=\"%s\", label=\"%s\"];\n ", cluster, m.getPPN()));
+        }
+    }
     /**
      *
      * @param m
@@ -294,7 +334,7 @@ public class TopicMapCreator {
     private Region getDdcRegionFor(Mets m) {
         String ddc = m.getDdcNumber();
         if (ddc == null) {
-            System.out.println("no ddc for " + m.getPPN());
+            System.out.println("no ddc for " + m.getMedasID());
             return getWorld();
         }
         for (Region firstLevel : getWorld().getChildren()) {
@@ -567,12 +607,13 @@ public class TopicMapCreator {
         return e;
     }
 
-    private DDCResolver getDDCResolver(){
-        if (ddcResolver == null){
+    private DDCResolver getDDCResolver() {
+        if (ddcResolver == null) {
             ddcResolver = new DDCResolver();
         }
         return ddcResolver;
     }
+
     class Region implements Comparable<Region> {
 
         private int documentNumber;
@@ -756,5 +797,4 @@ public class TopicMapCreator {
             return -1;
         }
     }
-    
 }
