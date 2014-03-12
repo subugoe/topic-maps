@@ -46,7 +46,7 @@ import org.xml.sax.helpers.XMLReaderFactory;
 public class TopicMapCreator {
 
     // All process METS files, unsorted and without hierarchy
-    private Set<Mets> mets = new HashSet<Mets>();
+    private Set<Doc> mets = new HashSet<>();
     // the largest region which contains all other
     private Region world;
     // the DOM document
@@ -55,7 +55,7 @@ public class TopicMapCreator {
     private Element firstG;
     private int circleSize = 20;
     // The directory with the METS files
-    private File metsDir;
+
     private DDCResolver ddcResolver;
 
     public static void main(String[] args) throws SAXException, FileNotFoundException, IOException {
@@ -112,53 +112,53 @@ public class TopicMapCreator {
         }
     }
 
-    /**
-     * Reads the METS files in the directory given as first parameter. The files
-     * are not read recursively. All parsed METS files are parsed in the file
-     * <code>mets</code> and are returned by the function.
-     *
-     * @throws SAXException
-     * @throws FileNotFoundException
-     * @throws IOException
-     */
-    private Set<Mets> readMETs() throws SAXException {
-
-        File[] metsFiles = metsDir.listFiles();
-        XMLReader xmlReader = XMLReaderFactory.createXMLReader();
-        MetsContentHandler metsContentHandler = new MetsContentHandler();
-
-        for (int i = 0; i < metsFiles.length; i++) {
-            try {
-                if (metsFiles[i].isDirectory()) {
-                    continue;
-                }
-                InputSource inputSource = new InputSource(new FileReader(metsFiles[i]));
-                xmlReader.setContentHandler(metsContentHandler);
-                xmlReader.parse(inputSource);
-                Mets m = metsContentHandler.getMets();
-                mets.add(m);
-//                if (true || m.getDdcNumber() != null && m.getDdcNumber().startsWith("7") || m.getPPN().contains("487748506")) { //TODO || m.getDdcNumber() != null && m.getDdcNumber().startsWith("7")
-//                    //            if (m.getDdcNumber() != null ) {
-//                    mets.add(m);
+//    /**
+//     * Reads the METS files in the directory given as first parameter. The files
+//     * are not read recursively. All parsed METS files are parsed in the file
+//     * <code>mets</code> and are returned by the function.
+//     *
+//     * @throws SAXException
+//     * @throws FileNotFoundException
+//     * @throws IOException
+//     */
+//    private Set<Doc> readMETs() throws SAXException {
+//
+//        File[] metsFiles = metsDir.listFiles();
+//        XMLReader xmlReader = XMLReaderFactory.createXMLReader();
+//        MetsContentHandler metsContentHandler = new MetsContentHandler();
+//
+//        for (int i = 0; i < metsFiles.length; i++) {
+//            try {
+//                if (metsFiles[i].isDirectory()) {
+//                    continue;
 //                }
-            } catch (FileNotFoundException ex) {
-                System.out.println("The file " + metsFiles[i] + " could not be found, skipping. " + ex);
-            } catch (IOException ex) {
-                System.out.println("The file " + metsFiles[i] + " could not be read, skipping. " + ex);
-            } catch (Exception ex) {
-                System.out.println("The file " + metsFiles[i] + " could not be parsed, skipping. " + ex);
-            }
-        }
-        return mets;
-    }
+//                InputSource inputSource = new InputSource(new FileReader(metsFiles[i]));
+//                xmlReader.setContentHandler(metsContentHandler);
+//                xmlReader.parse(inputSource);
+//                Doc m = metsContentHandler.getMets();
+//                mets.add(m);
+////                if (true || m.getDdcNumber() != null && m.getDdcNumber().startsWith("7") || m.getPPN().contains("487748506")) { //TODO || m.getDdcNumber() != null && m.getDdcNumber().startsWith("7")
+////                    //            if (m.getDdcNumber() != null ) {
+////                    mets.add(m);
+////                }
+//            } catch (FileNotFoundException ex) {
+//                System.out.println("The file " + metsFiles[i] + " could not be found, skipping. " + ex);
+//            } catch (IOException ex) {
+//                System.out.println("The file " + metsFiles[i] + " could not be read, skipping. " + ex);
+//            } catch (Exception ex) {
+//                System.out.println("The file " + metsFiles[i] + " could not be parsed, skipping. " + ex);
+//            }
+//        }
+//        return mets;
+//    }
 
-    private Set<Mets> readMETsFromMeDAS() {
-        mets = new HashSet<Mets>();
+    private Set<Doc> readMETsFromMeDAS() {
+        mets = new HashSet<>();
         MeDASClient meDAS = new MeDASClient();
         Set<Doc> allDocs = meDAS.getAllDocuments().getDocs();
         for (Doc doc : allDocs) {
             if (doc.getDDC() != null) { //FIXME remove again
-                mets.add(createMetsFromDoc(doc));
+                mets.add(doc);
             }
         }
         return mets;
@@ -208,7 +208,7 @@ public class TopicMapCreator {
 
 //        readMETs();
         readMETsFromMeDAS();
-        for (Mets m : mets) {
+        for (Doc m : mets) {
             Region r = getRegionFor(m);
             r.getDocuments().put(m, null);
         }
@@ -229,7 +229,7 @@ public class TopicMapCreator {
             System.out.print("  ");
         }
         System.out.println(r);
-        for (Mets m : r.getDocuments().keySet()) {
+        for (Doc m : r.getDocuments().keySet()) {
             for (int i = 0; i < level; i++) {
                 System.out.print("  ");
             }
@@ -282,10 +282,10 @@ public class TopicMapCreator {
 
     private void writeDocumentToDot(Region r, BufferedWriter fw, int cluster, Map<String, String> clusterMap) throws IOException {
 
-        for (Mets m : r.getDocuments().keySet()) {
-            String ppn = m.getPPN().replaceAll("-", "_");
+        for (Doc m : r.getDocuments().keySet()) {
+            String ppn = m.getId().getValue().replaceAll("-", "_"); //TODO change to getPPN
             fw.write(String.format("%s -- %s ;\n", r.getName(), ppn));
-            clusterMap.put(ppn, String.format(" [cluster=\"%s\", label=\"%s\"];\n ", cluster, m.getPPN()));
+            clusterMap.put(ppn, String.format(" [cluster=\"%s\", label=\"%s\"];\n ", cluster, m.getId().getValue()));
         }
     }
 
@@ -294,7 +294,7 @@ public class TopicMapCreator {
     }
     private void getIDsForRegion(Region r, List<String> list){
         list.add(r.getName());
-        for  (Mets  m: r.getDocuments().keySet()){
+        for  (Doc  m: r.getDocuments().keySet()){
 //            list.add(m.g) //FIXME
         }
     }
@@ -302,7 +302,7 @@ public class TopicMapCreator {
      * @param m
      * @return
      */
-    private Region getRegionFor(Mets m) {
+    private Region getRegionFor(Doc m) {
 
         Region r = getDdcRegionFor(m);
         Region journal = getJournalRegionFor(m, r);
@@ -319,10 +319,10 @@ public class TopicMapCreator {
      * @param m
      * @return
      */
-    private Region getDdcRegionFor(Mets m) {
-        String ddc = m.getDdcNumber();
+    private Region getDdcRegionFor(Doc m) {
+        String ddc = m.getDDCNumber();
         if (ddc == null) {
-            System.out.println("no ddc for " + m.getMedasID());
+            System.out.println("no ddc for " + m.getId());
             return getWorld();
         }
         for (Region firstLevel : getWorld().getChildren()) {
@@ -362,18 +362,18 @@ public class TopicMapCreator {
      * region of the given DDC. If the host is not present in the DDC region
      * yet, it is created.
      *
-     * @param m         the Mets to place
+     * @param doc         the Mets to place
      * @param ddcRegion the DDC region where the host should be searched or
      *                  created.
      * @return The host region for the Mets.
      */
-    private Region getJournalRegionFor(Mets m, Region ddcRegion) {
-        String host = m.getHost();
+    private Region getJournalRegionFor(Doc doc, Region ddcRegion) {
+        String host = doc.getHostPPN();
         if (host == null || host.trim().length() < 1) {
-            System.out.println("no journal for " + m);
+            System.out.println("no journal for " + doc);
             return ddcRegion;
         }
-//        if (host.equals(m.getDdcNumber())) {
+//        if (host.equals(doc.getDdcNumber())) {
 //            System.out.println("?????");
 //            return ddcRegion;
 //        }
@@ -519,7 +519,7 @@ public class TopicMapCreator {
         Element gElement = document.createElementNS(svgNS, "g");
         gElement.setAttributeNS(null, "display", "none");
         firstG.appendChild(gElement);
-        for (Mets key : r.getDocuments().keySet()) {
+        for (Doc key : r.getDocuments().keySet()) {
 
             Point pos = r.getDocuments().get(key);
 
@@ -536,10 +536,10 @@ public class TopicMapCreator {
         }
     }
 
-    private Element createRectElem(Region r, Point pos, Mets m) {
+    private Element createRectElem(Region r, Point pos, Doc m) {
         String svgNS = SVGDOMImplementation.SVG_NAMESPACE_URI;
         Element e = document.createElementNS(svgNS, "rect");
-        e.setAttributeNS(svgNS, "id", m.getPPN());
+        e.setAttributeNS(svgNS, "id", m.getId().getValue());
         e.setAttributeNS(svgNS, "type", "");
         e.setAttributeNS(svgNS, "x", Integer.toString(r.getPosition().x + pos.x));
         e.setAttributeNS(svgNS, "y", Integer.toString(r.getPosition().y + pos.y));
@@ -608,7 +608,7 @@ public class TopicMapCreator {
         private List<Region> children = new LinkedList<Region>();
         private Point position;
         private int radius = 0;
-        private Map<Mets, Point> documents = new HashMap<Mets, Point>();
+        private Map<Doc, Point> documents = new HashMap<>();
 
         public Region(int number, String name) {
             documentNumber = number;
@@ -682,7 +682,7 @@ public class TopicMapCreator {
          */
         private int placeDocuments() {
             int currentRadius = 30;
-            List<Mets> docs = new ArrayList<Mets>(getDocuments().keySet());
+            List<Doc> docs = new ArrayList<>(getDocuments().keySet());
 
             for (int i = 0; i < docs.size(); ) { // increment is in the inner loop
                 int documentsOnCircle = circlesPerRadius(currentRadius, circleSize);
@@ -748,11 +748,11 @@ public class TopicMapCreator {
             this.position = position;
         }
 
-        public Map<Mets, Point> getDocuments() {
+        public Map<Doc, Point> getDocuments() {
             return documents;
         }
 
-        public void setDocuments(Map<Mets, Point> documents) {
+        public void setDocuments(Map<Doc, Point> documents) {
             this.documents = documents;
         }
 
