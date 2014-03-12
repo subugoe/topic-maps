@@ -1,6 +1,7 @@
 package de.unigoettingen.sub;
 
 import de.unigoettingen.sub.model.Doc;
+
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -30,6 +31,7 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
+
 import org.apache.batik.dom.GenericDOMImplementation;
 import org.apache.batik.dom.svg.SVGDOMImplementation;
 import org.apache.batik.svggen.SVGGraphics2D;
@@ -54,19 +56,19 @@ public class TopicMapCreator {
     private int circleSize = 20;
     // The directory with the METS files
     private File metsDir;
+    private DDCResolver ddcResolver;
 
     public static void main(String[] args) throws SAXException, FileNotFoundException, IOException {
 
         TopicMapCreator app = new TopicMapCreator();
         app.run(args);
     }
-    private DDCResolver ddcResolver;
 
     private void run(String[] args) throws SAXException, FileNotFoundException, IOException {
         long start = System.currentTimeMillis();
         processArgs(args);
         world = buildTreeFromMets();
-        
+
         writeDotFile(world);
         System.out.println("processed METS " + (System.currentTimeMillis() - start) + "ms");
         layout(world);
@@ -155,12 +157,13 @@ public class TopicMapCreator {
         MeDASClient meDAS = new MeDASClient();
         Set<Doc> allDocs = meDAS.getAllDocuments().getDocs();
         for (Doc doc : allDocs) {
-            if (doc.getDDC() != null){ //FIXME remove again
-            mets.add(createMetsFromDoc(doc));
+            if (doc.getDDC() != null) { //FIXME remove again
+                mets.add(createMetsFromDoc(doc));
             }
         }
         return mets;
     }
+
 
     private Mets createMetsFromDoc(Doc doc) {
         Mets m = new Mets();
@@ -168,7 +171,7 @@ public class TopicMapCreator {
 //        if (doc.getClassifications() != null && doc.getClassifications().size() > 0) {
 //            m.setDdcNumber(doc.getClassifications().iterator().next().getValue());
 //        }
-        m.setDdcNumber(doc.getDDCNumber());        
+        m.setDdcNumber(doc.getDDCNumber());
 //        if (doc.getRelatedItems() != null && doc.getRelatedItems().size() > 0) {
 //            m.setHost(doc.getRelatedItems().iterator().next().getHost());
 //        }
@@ -195,41 +198,6 @@ public class TopicMapCreator {
         return maxcicles;
     }
 
-    @Deprecated
-    private Region buildTree() {
-        Region world = new Region(0, "All");
-        Region r0 = new Region(0, "Informatik, Informationswissenschaft, allgemeine Werke");
-        r0.addChild(new Region(8, "Libraryship"));
-        world.addChild(r0);
-        Region r1 = new Region(15, "Philosophy");
-        world.addChild(r1);
-        Region r2 = new Region(15, "Religion");
-        world.addChild(r2);
-        Region r3 = new Region(10, "Sociology");
-        r3.addChild(new Region(33, "economics"));
-        r3.addChild(new Region(27, "Economics"));
-        r3.addChild(new Region(12, "Law"));
-        r3.addChild(new Region(36, "Education"));
-        world.addChild(r3);
-        Region r4 = new Region(113, "Philology");
-        r4.addChild(new Region(1, "Englisch Languages"));
-        r4.addChild(new Region(80, "Germanic Languages"));
-        r4.addChild(new Region(48, "Romance Languages"));
-        world.addChild(r4);
-        Region r5 = new Region(16, "Science");
-        r5.addChild(new Region(243, "Mathematics"));
-        r5.addChild(new Region(2, "Geology"));
-        world.addChild(r5);
-        Region r7 = new Region(145, "Arts");
-        r7.addChild(new Region(30, "Musicology"));
-        world.addChild(r7);
-        Region r9 = new Region(84, "History");
-        r9.addChild(new Region(5, "Oriental Studies"));
-        world.addChild(r9);
-
-        return world;
-    }
-
     /**
      * Reads the METS files and build a hierarchy of them. Therefore each
      * {@link Mets} is stored as document in its {@link Region}.
@@ -249,6 +217,13 @@ public class TopicMapCreator {
         return world;
     }
 
+    /**
+     * Debugging method to print the hierarchy to the console. For each level the function calls itself recursively.
+     * For the first call level should be "0". The level controls the indenting of the tree branch.
+     *
+     * @param r The base node of the tree.
+     * @param level The current depth of the given base node.
+     */
     private void printTree(Region r, int level) {
         for (int i = 0; i < level; i++) {
             System.out.print("  ");
@@ -265,11 +240,16 @@ public class TopicMapCreator {
         }
     }
 
+    /**
+     * Write the hierarchy of objects to a dot file to be processed by graphviz.
+     * @param r The base node of the tree.
+     */
     private void writeDotFile(Region r) {
         try {
             BufferedWriter fw = new BufferedWriter(new FileWriter(new File(System.getProperty("java.io.tmpdir"), "topicMaps.dot")));
             fw.write("graph world {\n");
             fw.write("node [id=\"\\N\"];edge [id=\"\\T-\\H\"];");
+            //Each main topic of the DDC is on cluster
             int cluster = 1;
             HashMap<String, String> clusterMap = new HashMap<String, String>();
             for (Region island : r.getChildren()) {
@@ -280,7 +260,6 @@ public class TopicMapCreator {
             }
             for (String key : clusterMap.keySet()) {
                 fw.write(key + clusterMap.get(key));
-
             }
             fw.write("}\n");
             fw.close();
@@ -300,17 +279,26 @@ public class TopicMapCreator {
         }
         writeDocumentToDot(r, fw, cluster, clusterMap);
     }
-    
-    private void writeDocumentToDot(Region r,BufferedWriter fw,int cluster, Map<String, String> clusterMap ) throws IOException{
-        
-        for (Mets m : r.getDocuments().keySet()){
+
+    private void writeDocumentToDot(Region r, BufferedWriter fw, int cluster, Map<String, String> clusterMap) throws IOException {
+
+        for (Mets m : r.getDocuments().keySet()) {
             String ppn = m.getPPN().replaceAll("-", "_");
             fw.write(String.format("%s -- %s ;\n", r.getName(), ppn));
             clusterMap.put(ppn, String.format(" [cluster=\"%s\", label=\"%s\"];\n ", cluster, m.getPPN()));
         }
     }
+
+    private void getIDsForRegion(Region requestedRegion, Region currentRegion){
+        List<String> idList = new LinkedList<>();
+    }
+    private void getIDsForRegion(Region r, List<String> list){
+        list.add(r.getName());
+        for  (Mets  m: r.getDocuments().keySet()){
+//            list.add(m.g) //FIXME
+        }
+    }
     /**
-     *
      * @param m
      * @return
      */
@@ -374,9 +362,9 @@ public class TopicMapCreator {
      * region of the given DDC. If the host is not present in the DDC region
      * yet, it is created.
      *
-     * @param m the Mets to place
+     * @param m         the Mets to place
      * @param ddcRegion the DDC region where the host should be searched or
-     * created.
+     *                  created.
      * @return The host region for the Mets.
      */
     private Region getJournalRegionFor(Mets m, Region ddcRegion) {
@@ -406,19 +394,6 @@ public class TopicMapCreator {
             world.setChildren(new LinkedList<Region>());
         }
         return world;
-    }
-
-    class OwnRunnable implements Runnable {
-
-        private Region c;
-
-        public void setRegion(Region c) {
-            this.c = c;
-        }
-
-        public void run() {
-            c.getRadius();
-        }
     }
 
     /**
@@ -461,10 +436,9 @@ public class TopicMapCreator {
      * Writes the generated DOM to a SVG file. The document to write out should
      * be saved in the field {
      *
-     * @ #document}
-     *
      * @throws TransformerConfigurationException
      * @throws TransformerException
+     * @ #document}
      */
     private void write() throws TransformerConfigurationException, TransformerException {
         TransformerFactory transformerFactory = TransformerFactory.newInstance();
@@ -479,12 +453,6 @@ public class TopicMapCreator {
     private Graphics2D getGraphics(int size) {
         return getSVGGraphics(size);
     }
-//
-//    private Graphics2D getJavaGraphics(int size) {
-//        BufferedImage bi = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
-//        return (Graphics2D) bi.getGraphics();
-//    }
-//
 
     /**
      * Generates an default SVG document. The document has the given size (as
@@ -504,7 +472,7 @@ public class TopicMapCreator {
 
         // Create an instance of the SVG Generator.
         SVGGraphics2D svgGenerator = new SVGGraphics2D(document);
-        //        root = svgGenerator.getRoot();
+        //root = svgGenerator.getRoot();
         Element svgNode = document.getDocumentElement();
 
         svgNode.setAttributeNS(null, "style", "stroke-dasharray:none; shape-rendering:auto; font-family:&apos;Dialog&apos;; text-rendering:auto; fill-opacity:1; color-interpolation:auto; color-rendering:auto; font-size:12; fill:black; stroke:black; image-rendering:auto; stroke-miterlimit:10; stroke-linecap:square; stroke-linejoin:miter; font-style:normal; stroke-width:1; stroke-dashoffset:0; font-weight:normal; stroke-opacity:1;");
@@ -523,6 +491,12 @@ public class TopicMapCreator {
         svgNode.appendChild(scriptNode);
         return svgGenerator;
     }
+//
+//    private Graphics2D getJavaGraphics(int size) {
+//        BufferedImage bi = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
+//        return (Graphics2D) bi.getGraphics();
+//    }
+//
 
     /**
      * Adds all elements of the Region to the SVG DOM.
@@ -614,6 +588,19 @@ public class TopicMapCreator {
         return ddcResolver;
     }
 
+    class OwnRunnable implements Runnable {
+
+        private Region c;
+
+        public void setRegion(Region c) {
+            this.c = c;
+        }
+
+        public void run() {
+            c.getRadius();
+        }
+    }
+
     class Region implements Comparable<Region> {
 
         private int documentNumber;
@@ -690,14 +677,14 @@ public class TopicMapCreator {
          * Place the documents of the region in the inner circles. The size of a
          * document symbol is fixed and defined in the field {
          *
-         * @ #circleSize}.
          * @return
+         * @ #circleSize}.
          */
         private int placeDocuments() {
             int currentRadius = 30;
             List<Mets> docs = new ArrayList<Mets>(getDocuments().keySet());
 
-            for (int i = 0; i < docs.size();) { // increment is in the inner loop
+            for (int i = 0; i < docs.size(); ) { // increment is in the inner loop
                 int documentsOnCircle = circlesPerRadius(currentRadius, circleSize);
                 if (documentsOnCircle > docs.size() - i) {
                     documentsOnCircle = docs.size() - i;
@@ -718,7 +705,6 @@ public class TopicMapCreator {
 
         /**
          * Reposition the children relative to the new position of the region.
-         *
          */
         public void reposChildren() {
             if (children == null) {
