@@ -71,6 +71,8 @@ public class TopicMapCreator {
 
         writeDotFile(world);
         System.out.println("processed METS " + (System.currentTimeMillis() - start) + "ms");
+        Region region400 = getRegionWithName("430", getWorld());
+        System.out.println(getIDsForRegion(region400));
         layout(world);
 
         try {
@@ -92,24 +94,24 @@ public class TopicMapCreator {
      * @param args
      */
     private void processArgs(String[] args) {
-        if (args.length != 1) {
-            System.err.println("The programm need the directory with the METS files to parse as first parameter");
-//            System.exit(2);
-            return;
-        }
-        metsDir = new File(args[0]);
-        if (!metsDir.exists()) {
-            System.err.println("The directory '" + metsDir + "' with the METS files does not exits.");
-            System.exit(3);
-        }
-        if (!metsDir.isDirectory()) {
-            System.err.println("'" + metsDir + "' should be a directory containing the METS files.");
-            System.exit(3);
-        }
-        if (!metsDir.canExecute()) {
-            System.err.println("The directory '" + metsDir + "' is not accessible.");
-            System.exit(3);
-        }
+//        if (args.length != 1) {
+//            System.err.println("The programm need the directory with the METS files to parse as first parameter");
+////            System.exit(2);
+//            return;
+//        }
+//        metsDir = new File(args[0]);
+//        if (!metsDir.exists()) {
+//            System.err.println("The directory '" + metsDir + "' with the METS files does not exits.");
+//            System.exit(3);
+//        }
+//        if (!metsDir.isDirectory()) {
+//            System.err.println("'" + metsDir + "' should be a directory containing the METS files.");
+//            System.exit(3);
+//        }
+//        if (!metsDir.canExecute()) {
+//            System.err.println("The directory '" + metsDir + "' is not accessible.");
+//            System.exit(3);
+//        }
     }
 
 //    /**
@@ -289,14 +291,39 @@ public class TopicMapCreator {
         }
     }
 
-    private void getIDsForRegion(Region requestedRegion, Region currentRegion){
-        List<String> idList = new LinkedList<>();
+    private Region getRegionWithName(String name, Region currentRegion){
+        if (name.equals(currentRegion.getName())){
+            return currentRegion;
+        }
+        for (Region child: currentRegion.getChildren()){
+            Region result = getRegionWithName(name, child);
+            if (result != null){
+                return result;
+            }
+        }
+        return null;
     }
-    private void getIDsForRegion(Region r, List<String> list){
+    private Set<String> getIDsForRegion(Region requestedRegion){
+        Set<String> idSet = new HashSet<>();
+        idSet.add(requestedRegion.getName());
+        for (Doc doc :requestedRegion.getDocuments().keySet()){
+            idSet.add(doc.getId().getValue());
+        }
+        for (Region child : requestedRegion.getChildren()){
+           getIDsForRegion(child, idSet);
+        }
+        return idSet;
+    }
+    private Set<String> getIDsForRegion(Region r, Set<String> list){
         list.add(r.getName());
         for  (Doc  m: r.getDocuments().keySet()){
-//            list.add(m.g) //FIXME
+            list.add(m.getId().getValue());
         }
+        for (Region child: r.getChildren()){
+            getIDsForRegion(child, list);
+        }
+
+        return list;
     }
     /**
      * @param m
