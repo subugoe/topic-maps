@@ -1,6 +1,7 @@
 package de.unigoettingen.sub;
 
-import de.unigoettingen.sub.model.Doc;
+import de.unigoettingen.sub.medas.client.MeDASClient;
+import de.unigoettingen.sub.medas.model.Doc;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
