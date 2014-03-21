@@ -4,7 +4,6 @@ import de.unigoettingen.sub.medas.client.MeDASClient;
 import de.unigoettingen.sub.medas.model.Doc;
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.HashMap;
@@ -15,32 +14,22 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.xml.sax.SAXException;
-
 public class TopicMapCreator {
 
     // All process METS files, unsorted and without hierarchy
     private Set<Doc> mets = new HashSet<>();
     // the largest region which contains all other
     private Region world;
-    // the DOM document
-    private Document document;
-    // the first graphics (g) element in the SVG document
-    private Element firstG;
-
-    // The directory with the METS files
 
     private DDCResolver ddcResolver;
 
-    public static void main(String[] args) throws SAXException, FileNotFoundException, IOException {
+    public static void main(String[] args) throws  IOException {
 
         TopicMapCreator app = new TopicMapCreator();
         app.run(args);
     }
 
-    private void run(String[] args) throws SAXException, FileNotFoundException, IOException {
+    private void run(String[] args) throws  IOException {
         long start = System.currentTimeMillis();
         world = buildTreeFromMets();
 
@@ -56,32 +45,17 @@ public class TopicMapCreator {
      *
      * @return
      */
+    @Deprecated
     private Set<Doc> readMETsFromMeDAS() {
         mets = new HashSet<>();
         MeDASClient meDAS = new MeDASClient();
         Set<Doc> allDocs = meDAS.getAllDocuments().getDocs();
         for (Doc doc : allDocs) {
-            if (true || doc.getDDC() != null) { //FIXME remove again
+            if (true || doc.getDDC() != null) { //FIXME remove again. What should be done with unclassified documents?
                 mets.add(doc);
             }
         }
         return mets;
-    }
-
-
-    private Mets createMetsFromDoc(Doc doc) {
-        Mets m = new Mets();
-        m.setMedasID(doc.getDocid());
-//        if (doc.getClassifications() != null && doc.getClassifications().size() > 0) {
-//            m.setDdcNumber(doc.getClassifications().iterator().next().getValue());
-//        }
-        m.setDdcNumber(doc.getDDCNumber());
-//        if (doc.getRelatedItems() != null && doc.getRelatedItems().size() > 0) {
-//            m.setHost(doc.getRelatedItems().iterator().next().getHost());
-//        }
-        m.setHost(doc.getHostPPN());
-        m.setPPN(doc.getId().getValue());
-        return m;
     }
 
     /**
@@ -90,10 +64,12 @@ public class TopicMapCreator {
      *
      * @return The most general region (world).
      */
-    private Region buildTreeFromMets() throws SAXException, FileNotFoundException, IOException {
+    private Region buildTreeFromMets()  {
 
-        readMETsFromMeDAS();
-        for (Doc m : mets) {
+//        getMETsFromMeDAS();
+        MeDASReader reader = new MeDASReader();
+
+        for (Doc m : reader.getMETsFromMeDAS()) {
             Region r = getRegionFor(m);
             r.getDocuments().put(m, null);
         }
@@ -137,7 +113,7 @@ public class TopicMapCreator {
             fw.write("node [id=\"\\N\"];edge [id=\"\\T-\\H\"];");
             //Each main topic of the DDC is on cluster
             int cluster = 1;
-            HashMap<String, String> clusterMap = new HashMap<String, String>();
+            HashMap<String, String> clusterMap = new HashMap<>();
             for (Region island : r.getChildren()) {
                 fw.write("subgraph sub_" + island.getName() + " {\n");
                 writeDotLine(island, fw, cluster, clusterMap);
@@ -169,9 +145,9 @@ public class TopicMapCreator {
     private void writeDocumentToDot(Region r, BufferedWriter fw, int cluster, Map<String, String> clusterMap) throws IOException {
 
         for (Doc m : r.getDocuments().keySet()) {
-            String ppn = m.getId().getValue().replaceAll("-", "_"); //TODO change to getPPN
+            String ppn = m.getPPN().replaceAll("-", "_");
             fw.write(String.format("%s -- %s ;\n", r.getName(), ppn));
-            clusterMap.put(ppn, String.format(" [cluster=\"%s\", label=\"%s\"];\n ", cluster, m.getId().getValue()));
+            clusterMap.put(ppn, String.format(" [cluster=\"%s\", label=\"%s\"];\n ", cluster, m.getPPN()));
         }
     }
 
@@ -192,7 +168,7 @@ public class TopicMapCreator {
         Set<String> idSet = new HashSet<>();
         idSet.add(requestedRegion.getName());
         for (Doc doc : requestedRegion.getDocuments().keySet()) {
-            idSet.add(doc.getId().getValue());
+            idSet.add(doc.getPPN());
         }
         for (Region child : requestedRegion.getChildren()) {
             getIDsForRegion(child, idSet);
@@ -203,7 +179,7 @@ public class TopicMapCreator {
     private Set<String> getIDsForRegion(Region r, Set<String> list) {
         list.add(r.getName());
         for (Doc m : r.getDocuments().keySet()) {
-            list.add(m.getId().getValue());
+            list.add(m.getPPN());
         }
         for (Region child : r.getChildren()) {
             getIDsForRegion(child, list);
@@ -219,8 +195,7 @@ public class TopicMapCreator {
     private Region getRegionFor(Doc m) {
 
         Region r = getDdcRegionFor(m);
-        Region journal = getJournalRegionFor(m, r);
-        return journal;
+        return getJournalRegionFor(m, r);
     }
 
     /**
@@ -236,7 +211,7 @@ public class TopicMapCreator {
     private Region getDdcRegionFor(Doc m) {
         String ddc = m.getDDCNumber();
         if (ddc == null) {
-            System.out.println("no ddc for " + m.getId());
+            System.out.println("no ddc for " + m.getPPN());
             return getWorld();
         }
         for (Region firstLevel : getWorld().getChildren()) {
@@ -282,7 +257,7 @@ public class TopicMapCreator {
      * @return The host region for the Mets.
      */
     private Region getJournalRegionFor(Doc doc, Region ddcRegion) {
-        String host = doc.getHostPPN();
+        String host = doc.getHostPPN().iterator().next(); //TODO
         if (host == null || host.trim().length() < 1) {
             System.out.println("no journal for " + doc);
             return ddcRegion;
