@@ -32,7 +32,6 @@ public class MeDASReaderTest {
         assertEquals(1, reader.getMETsFromMeDAS().size());
 
         verify(mockClient, times(1)).getAllDocuments();
-
     }
 
 
